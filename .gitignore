@@ -35,3 +35,16 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Logs ###
+*.log
+hs_err_pid*
+replay_pid*
+startup*.log
+
+### Frontend ###
+app/**/node_modules/
+app/**/dist/
+app/**/dist-ssr/
+app/**/.env.local
+app/**/.env.*.local

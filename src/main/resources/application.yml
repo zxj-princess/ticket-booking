@@ -1,0 +1,82 @@
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: ticket-booking
+  
+  # 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ticket_booking?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    username: root
+    password: root
+
+  # 数据库自动初始化
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
+      schema-locations: classpath:db/schema.sql
+      data-locations: classpath:db/seed_data.sql
+      encoding: UTF-8
+  
+  # JSON配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+# MyBatis-Plus配置
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.ticket.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# AI配置
+ai:
+  # 大模型API配置
+  chat-model:
+    provider: dashscope  # dashscope | openai
+    api-key:
+    model-name: qwen-max
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  
+  # 向量模型配置
+  embedding-model:
+    provider: dashscope
+    api-key:
+    model-name: text-embedding-v2
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  
+  # 向量数据库配置(Milvus)
+  vector-store:
+    milvus:
+      host: localhost
+      port: 19530
+      collection-name: ticket_knowledge
+  
+  # AI Agent配置
+  agent:
+    enabled: true
+    max-iterations: 10
+    timeout-seconds: 60
+
+# 日志配置
+logging:
+  level:
+    com.ticket: debug
+    com.baomidou.mybatisplus: debug
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{50} - %msg%n"

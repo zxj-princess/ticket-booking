@@ -1,0 +1,118 @@
+package com.ticket.ai.config;
+
+import dev.langchain4j.memory.ChatMemory;
+import dev.langchain4j.memory.chat.ChatMemoryProvider;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import dev.langchain4j.data.segment.TextSegment;
+import com.ticket.ai.agent.TicketBookingAgent;
+import com.ticket.ai.agent.TicketBookingTools;
+import dev.langchain4j.service.AiServices;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * AI 配置类
+ * 配置大模型、Embedding模型、向量存储、对话记忆和AI Agent服务
+ */
+@Configuration
+public class AiConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(AiConfig.class);
+
+    @Value("${ai.chat-model.api-key}")
+    private String chatApiKey;
+
+    @Value("${ai.chat-model.model-name}")
+    private String chatModelName;
+
+    @Value("${ai.chat-model.base-url}")
+    private String chatBaseUrl;
+
+    @Value("${ai.embedding-model.api-key}")
+    private String embeddingApiKey;
+
+    @Value("${ai.embedding-model.model-name}")
+    private String embeddingModelName;
+
+    @Value("${ai.embedding-model.base-url}")
+    private String embeddingBaseUrl;
+
+    /**
+     * 配置聊天大模型
+     */
+    @Bean
+    public ChatLanguageModel chatLanguageModel() {
+        log.info("初始化聊天模型: {}", chatModelName);
+        return OpenAiChatModel.builder()
+                .baseUrl(chatBaseUrl)
+                .apiKey(chatApiKey)
+                .modelName(chatModelName)
+                .build();
+    }
+
+    /**
+     * 配置Embedding模型
+     */
+    @Bean
+    public EmbeddingModel embeddingModel() {
+        log.info("初始化Embedding模型: {}", embeddingModelName);
+        return OpenAiEmbeddingModel.builder()
+                .baseUrl(embeddingBaseUrl)
+                .apiKey(embeddingApiKey)
+                .modelName(embeddingModelName)
+                .build();
+    }
+
+    /**
+     * 配置向量存储（默认使用内存存储，可配置Milvus）
+     */
+    @Bean
+    public EmbeddingStore<TextSegment> embeddingStore() {
+        log.info("使用内存向量存储");
+        return new InMemoryEmbeddingStore<>();
+    }
+
+    /**
+     * 配置对话记忆提供者
+     * 基于 sessionId 为每个会话独立维护一份记忆窗口（最多保留20条消息）
+     */
+    @Bean
+    public ChatMemoryProvider chatMemoryProvider() {
+        log.info("初始化ChatMemoryProvider");
+        final Map<Object, ChatMemory> memoryStore = new ConcurrentHashMap<>();
+        return new ChatMemoryProvider() {
+            @Override
+            public ChatMemory get(Object memoryId) {
+                return memoryStore.computeIfAbsent(memoryId,
+                        id -> MessageWindowChatMemory.withMaxMessages(20));
+            }
+        };
+    }
+
+    /**
+     * 配置AI Agent服务（带对话记忆 + 工具调用）
+     */
+    @Bean
+    public TicketBookingAgent ticketBookingAgent(ChatLanguageModel chatLanguageModel,
+                                                  TicketBookingTools tools,
+                                                  ChatMemoryProvider chatMemoryProvider) {
+        log.info("初始化AI Agent（带对话记忆+工具调用）");
+        return AiServices.builder(TicketBookingAgent.class)
+                .chatLanguageModel(chatLanguageModel)
+                .chatMemoryProvider(chatMemoryProvider)
+                .tools(tools)
+                .build();
+    }
+}

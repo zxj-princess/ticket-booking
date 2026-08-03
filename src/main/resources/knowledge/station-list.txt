@@ -1,0 +1,77 @@
+全国主要火车站点列表
+
+【北京市】
+北京（BJ）、北京南（VNP）、北京西（BXP）、北京北（VBP）、北京东（BFP）、北京朝阳（BMF）、北京丰台（BFP）、北京大兴（VAP）
+
+【上海市】
+上海（SHH）、上海虹桥（AOH）、上海南（SNH）、上海西（SXH）、上海北（SBH）
+
+【广东省】
+广州（GZQ）、广州南（GNQ）、广州西（GXQ）、广州北（GBQ）、深圳（SZQ）、深圳北（SNQ）、深圳西（SXQ）、佛山西（FSQ）、东莞（DGQ）、东莞南（DQQ）、珠海（ZHQ）、珠海北（ZBQ）、中山（ZSQ）、惠州（HZQ）、惠州南（KNQ）、汕头（STQ）、湛江（ZJJ）、肇庆（ZQQ）
+
+【江苏省】
+南京（NJG）、南京南（NKH）、南京西（NXH）、南京北（NBH）、南京禄口机场站（NLK）、苏州（SZH）、苏州北（SBH）、苏州园博园站、无锡（WXH）、无锡东（WXH）、常州（CZH）、常州北（CBH）、镇江（ZJH）、镇江南站（ZJF）、徐州（XZH）、徐州东（XDH）、南通（NTH）、南通西（NTH）、扬州（YZH）、扬州东（YDG）
+
+【浙江省】
+杭州（HZH）、杭州东（HGH）、杭州南（HNH）、杭州西（HXH）、杭州北（HBH）、宁波（NGH）、宁波北（NBH）、温州（WZH）、温州南（VRH）、温州北（WZB）、嘉兴（JZH）、嘉兴南（JAH）、绍兴（SXH）、绍兴北（SHA）、金华（JHH）、金华南（JNH）、台州（TZH）、台州西（TZS）、丽水（LSH）、义乌（YWH）
+
+【四川省】
+成都（CDW）、成都东（IDW）、成都南（CNH）、成都西（CXW）、成都北（CBW）、绵阳（MYW）、绵阳南（MYP）、德阳（DPW）、乐山（LEW）、峨眉山（EPW）、宜宾（YBW）、宜宾西（YBZ）、泸州（LZH）、南充（NCH）、达州（DZZ）
+
+【湖北省】
+武汉（WHN）、武汉北（WHN）、武汉西（WHX）、武昌（WCN）、汉口（HKN）、武汉站（WHN）、襄阳（XFN）、襄阳东（XDY）、宜昌（YCN）、宜昌东（YDA）、黄冈（HGG）、黄冈东（HJE）、荆州（JZH）、荆州北（JBZ）
+
+【湖南省】
+长沙（CSQ）、长沙南（CSN）、长沙西（CSX）、株洲（ZZQ）、株洲西（ZXS）、株洲北（ZZB）、湘潭（XTQ）、湘潭北（XTB）、衡阳（HYQ）、衡阳东（HYD）、岳阳（YYQ）、岳阳东（YYB）、常德（CDG）、张家界（DXG）、张家界西（DXG）、益阳（YGY）、益阳南（YSN）
+
+【山东省】
+济南（JNK）、济南西（JGK）、济南东（JDK）、济南北（JNK）、青岛（QDK）、青岛北（QDK）、青岛西（QXI）、青岛站（QDK）、烟台（YOK）、烟台南（YTS）、潍坊（WFK）、潍坊南（WFN）、淄博（ZBK）、淄博北（ZBB）、威海（WHK）、威海北（WKK）、泰安（TAK）、泰安西（TAQ）、临沂（LYK）、临沂北（LBK）
+
+【河南省】
+郑州（ZZF）、郑州东（ZAF）、郑州西（ZAX）、郑州北（ZZB）、郑州航空港站（ZAF）、洛阳（LYF）、龙门（LMF）、洛阳北（LYB）、开封（KFF）、开封北（KBF）、新乡（XXF）、新乡东（XXD）、信阳（XNF）、信阳东（XDN）、南阳（NYF）、南阳东（NYN）、商丘（SQF）、商丘北（SQB）
+
+【福建省】
+福州（FZS）、福州南（FYS）、福州北（FBZ）、厦门（XMS）、厦门北（XBS）、厦门高崎站（XMS）、泉州（QZS）、泉州东（QYS）、泉州站（QZS）、漳州（ZUS）、漳州南（ZNS）、莆田（PTS）、南平（NPS）、南平北（NPB）、三明（SMS）
+
+【安徽省】
+合肥（HFH）、合肥南（ENH）、合肥北（HFH）、合肥西（HFX）、合肥站（HFH）、芜湖（WHH）、芜湖站（WHH）、蚌埠（BBH）、蚌埠南（BMH）、蚌埠北（BBH）、马鞍山（MASH）、马鞍山北（MAB）、安庆（AQH）、安庆北（AQB）、黄山（HKH）、黄山北（HKF）、黄山风景区站（HKF）
+
+【江西省】
+南昌（NCG）、南昌西（NXG）、南昌北（NBG）、南昌站（NCG）、赣州（GZG）、赣州西（GZX）、赣州北（GZB）、九江（JJG）、九江北（JJB）、上饶（SRG）、上饶北（SRB）、上饶站（SRG）、景德镇（JDZ）、景德镇北（JDB）、萍乡（PXG）、萍乡北（PXB）、宜春（YCG）、宜春北（YCB）
+
+【辽宁省】
+沈阳（SYB）、沈阳北（SYY）、沈阳南（SNY）、沈阳西（SYX）、沈阳站（SYB）、大连（DLT）、大连北（DBT）、大连西（DXD）、鞍山（AST）、鞍山北（ABT）、抚顺（FST）、本溪（BST）、丹东（DNT）、丹东北（DNB）、锦州（JZJ）、锦州北（JZB）、营口（YKH）
+
+【吉林省】
+长春（CCB）、长春北（CCT）、长春南（CCT）、长春西（CCX）、长春站（CCB）、吉林（JLL）、吉林北（JLP）、吉林西站（JLX）、四平（SPT）、四平东（SPP）、通化（THL）、延吉（YJL）、敦化（DHL）
+
+【黑龙江省】
+哈尔滨（HRB）、哈尔滨北（VBB）、哈尔滨西（VAX）、哈尔滨站（HRB）、哈尔滨东站（HDB）、齐齐哈尔（QQK）、齐齐哈尔南（QQN）、大庆（DQQ）、大庆北（DBQ）、牡丹江（MJJ）、佳木斯（JMJ）、绥化（SHB）
+
+【陕西省】
+西安（XAY）、西安北（EAY）、西安南（CAY）、西安西（XXY）、西安站（XAY）、宝鸡（BJY）、宝鸡南（BAY）、宝鸡北（BBY）、咸阳（XKY）、咸阳秦都站（XKY）、渭南（WNY）、渭南北（WBP）、延安（YAY）、延安北（YAB）、榆林（YLX）
+
+【甘肃省】
+兰州（LZJ）、兰州西（LAJ）、兰州北（LBJ）、兰州站（LZJ）、兰州新区站（LQJ）、天水（TSJ）、天水南（TIS）、张掖（SYJ）、张掖西（SYX）、敦煌（DHJ）、嘉峪关（JYG）、嘉峪关南（JYK）
+
+【云南省】
+昆明（KMM）、昆明南（KMG）、昆明西（KMX）、昆明站（KMM）、昆明北站（KMB）、大理（DLM）、大理东（DLO）、大理北（DLB）、丽江（LKM）、丽江东（LJO）、丽江站（LKM）、曲靖（QJM）、曲靖北（QJB）、玉溪（YXM）、玉溪南（YXN）、蒙自（MSM）
+
+【贵州省】
+贵阳（GGZ）、贵阳北（KQW）、贵阳南（GZN）、贵阳西（GXZ）、贵阳站（GGZ）、贵阳北站（KQW）、遵义（ZYZ）、遵义北（ZYB）、遵义站（ZYZ）、安顺（ASZ）、安顺西（ASN）、六盘水（LPZ）、凯里（KLZ）、凯里南（KLN）
+
+【广西壮族自治区】
+南宁（NNZ）、南宁东（NFZ）、南宁北（NBB）、南宁站（NNZ）、南宁西站（NNX）、桂林（GLZ）、桂林北（GBZ）、桂林站（GLZ）、桂林西站（GLX）、柳州（LZF）、柳州北（LZB）、柳州站（LZF）、北海（BHZ）、北海北（BHB）、钦州（QZZ）
+
+【广东省深圳市补充】
+福田（FUT）、福田站（FUT）、深圳湾（SBY）、深圳坪山（SQI）、深圳光明城站（IGL）
+
+【其他重要站点】
+- 北京南站：中国高铁枢纽，主要运营京沪、京广、京哈等高铁线路
+- 上海虹桥站：亚洲最大铁路客站之一
+- 广州南站：珠三角地区重要高铁枢纽
+- 郑州东站：中部地区重要高铁枢纽
+- 成都东站：西南地区重要高铁枢纽
+- 武汉站：中部地区高铁枢纽
+- 西安北站：西北地区高铁枢纽
+- 重庆北站：西南地区重要枢纽
