@@ -126,16 +126,105 @@ public class OrderServiceImpl implements OrderService {
         if (order == null) {
             throw new BusinessException("订单不存在");
         }
+
+        // 1. 状态校验
         if (order.getStatus() != 1 && order.getStatus() != 2) {
-            throw new BusinessException("当前订单状态不支持退票");
+            throw new BusinessException("当前订单状态不支持退票，只有待出行或已完成的订单才能退票");
         }
-        BigDecimal refundFee = order.getTotalAmount().multiply(new BigDecimal("0.05"));
+
+        // 2. 已发车拦截
+        if (order.getDepartTime() != null && java.time.LocalDateTime.now().isAfter(order.getDepartTime())) {
+            throw new BusinessException("列车已发车，不允许退票");
+        }
+
+        // 3. 开车后改签的车票禁止退票
+        if (order.getRemark() != null && order.getRemark().contains("开车后改签")) {
+            throw new BusinessException("开车后改签生成的车票不支持退票");
+        }
+
+        // 4. 计算退票费
+        BigDecimal refundFee = calculateRefundFee(order);
         BigDecimal refundAmount = order.getTotalAmount().subtract(refundFee);
-        order.setStatus(3);
-        order.setRefundTime(LocalDateTime.now());
+
+        order.setStatus(3); // 已退票
+        order.setRefundTime(java.time.LocalDateTime.now());
         order.setRefundAmount(refundAmount);
         order.setRefundFee(refundFee);
         orderMapper.updateById(order);
+
+        // 5. 退款到钱包
+        refundToWallet(order.getUserId(), refundAmount);
+    }
+
+    /**
+     * 退票费计算：4档费率
+     * - ≥8天: 0%
+     * - 48h~8天: 5%
+     * - 24h~48h: 10%
+     * - <24h: 20%
+     * - 最低2元，5角尾数
+     */
+    private BigDecimal calculateRefundFee(Order order) {
+        BigDecimal totalAmount = order.getTotalAmount();
+        if (totalAmount == null || totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.time.LocalDateTime departTime = order.getDepartTime();
+        BigDecimal rate;
+
+        if (departTime != null) {
+            long hoursToDepart = java.time.Duration.between(now, departTime).toHours();
+            long daysToDepart = hoursToDepart / 24;
+
+            if (daysToDepart >= 8) {
+                rate = BigDecimal.ZERO;
+            } else if (hoursToDepart >= 48) {
+                rate = new BigDecimal("0.05");
+            } else if (hoursToDepart >= 24) {
+                rate = new BigDecimal("0.10");
+            } else {
+                rate = new BigDecimal("0.20");
+            }
+        } else {
+            rate = new BigDecimal("0.05");
+        }
+
+        BigDecimal fee = totalAmount.multiply(rate);
+
+        // 最低2元
+        BigDecimal minFee = new BigDecimal("2.00");
+        if (fee.compareTo(minFee) < 0 && fee.compareTo(BigDecimal.ZERO) > 0) {
+            fee = minFee;
+        }
+
+        // 5角尾数处理
+        fee = roundTo50Cents(fee);
+
+        // 不超过票面金额
+        if (fee.compareTo(totalAmount) > 0) {
+            fee = totalAmount;
+        }
+
+        return fee.setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 5角尾数处理
+     * ＜2.5角舍去；≥2.5且＜7.5计5角；≥7.5进1元
+     */
+    private BigDecimal roundTo50Cents(BigDecimal value) {
+        double yuan = value.doubleValue();
+        double jiao = (yuan - Math.floor(yuan)) * 10;
+        BigDecimal base = BigDecimal.valueOf(Math.floor(yuan));
+        if (jiao < 2.5) {
+            return base.setScale(2, java.math.RoundingMode.DOWN);
+        } else if (jiao < 7.5) {
+            return base.add(new BigDecimal("0.50"));
+        } else {
+            return base.add(BigDecimal.ONE);
+        }
     }
 
     @Override
@@ -173,28 +262,29 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal oldPrice = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
         BigDecimal newPrice = getSeatPrice(newTrain, finalSeatType);
         BigDecimal diff = newPrice.subtract(oldPrice);
-        BigDecimal fee = calculateChangeFee(order, oldPrice);
+
+        java.time.LocalDate targetDate = null;
+        if (dateStr != null && !dateStr.isEmpty()) {
+            targetDate = java.time.LocalDate.parse(dateStr, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        } else if (order.getDepartTime() != null) {
+            targetDate = order.getDepartTime().toLocalDate();
+        } else {
+            targetDate = java.time.LocalDate.now();
+        }
+
+        BigDecimal fee = calculateChangeFeeV2(order, oldPrice, newPrice, targetDate);
         BigDecimal finalAmount = diff.add(fee);
 
         order.setTrainId(newTrain.getId());
         order.setTrainNumber(newTrain.getTrainNumber());
         order.setSeatType(finalSeatType);
-        order.setRemark("已改签,原价:" + oldPrice + ",新价:" + newPrice + ",手续费:" + fee);
-
-        java.time.LocalDate travelDate;
-        if (dateStr != null && !dateStr.isEmpty()) {
-            travelDate = java.time.LocalDate.parse(dateStr, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        } else if (order.getDepartTime() != null) {
-            travelDate = order.getDepartTime().toLocalDate();
-        } else {
-            travelDate = java.time.LocalDate.now();
-        }
+        order.setRemark("已改签,原价:" + oldPrice + ",新价:" + newPrice + ",改签费:" + fee + ",差额:" + diff);
 
         try {
             java.time.LocalTime departTime = java.time.LocalTime.parse(newTrain.getDepartTime(), java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
             java.time.LocalTime arriveTime = java.time.LocalTime.parse(newTrain.getArriveTime(), java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-            order.setDepartTime(java.time.LocalDateTime.of(travelDate, departTime));
-            order.setArriveTime(java.time.LocalDateTime.of(travelDate, arriveTime));
+            order.setDepartTime(java.time.LocalDateTime.of(targetDate, departTime));
+            order.setArriveTime(java.time.LocalDateTime.of(targetDate, arriveTime));
         } catch (Exception e) {
             order.setDepartTime(order.getDepartTime());
             order.setArriveTime(order.getArriveTime());
@@ -216,12 +306,34 @@ public class OrderServiceImpl implements OrderService {
         orderMapper.updateById(order);
     }
 
-    private BigDecimal calculateChangeFee(Order order, BigDecimal oldPrice) {
+    /**
+     * 改签手续费V2：7档费率系统
+     */
+    private BigDecimal calculateChangeFeeV2(Order order, BigDecimal oldPrice, BigDecimal newPrice, java.time.LocalDate targetDate) {
         if (order.getDepartTime() == null || oldPrice == null) return BigDecimal.ZERO;
-        long hours = java.time.Duration.between(java.time.LocalDateTime.now(), order.getDepartTime()).toHours();
-        if (hours >= 48) return BigDecimal.ZERO;
-        if (hours >= 24) return oldPrice.multiply(new BigDecimal("0.05")).setScale(2, java.math.RoundingMode.HALF_UP);
-        return oldPrice.multiply(new BigDecimal("0.10")).setScale(2, java.math.RoundingMode.HALF_UP);
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.time.LocalDateTime departTime = order.getDepartTime();
+        boolean isAfterDepart = now.isAfter(departTime);
+        long hoursToDepart = java.time.Duration.between(now, departTime).toHours();
+
+        java.time.LocalDate originalDate = departTime.toLocalDate();
+        boolean targetAfterOriginal = targetDate != null && targetDate.isAfter(originalDate);
+
+        BigDecimal feeBase = oldPrice.min(newPrice);
+        BigDecimal rate = BigDecimal.ZERO;
+
+        if (isAfterDepart) {
+            rate = targetAfterOriginal ? new BigDecimal("0.40") : BigDecimal.ZERO;
+        } else if (hoursToDepart >= 48) {
+            rate = BigDecimal.ZERO;
+        } else if (hoursToDepart >= 24) {
+            rate = targetAfterOriginal ? new BigDecimal("0.05") : BigDecimal.ZERO;
+        } else {
+            rate = targetAfterOriginal ? new BigDecimal("0.15") : BigDecimal.ZERO;
+        }
+
+        return feeBase.multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
     private void refundToWallet(Long userId, BigDecimal amount) {

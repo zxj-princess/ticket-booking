@@ -205,21 +205,28 @@ public class TicketBookingTools {
         return """
                 火车票退票规则：
                 
-                1. 退票时间规定：
+                1. 退票时间规定（按距发车时间计算）：
                    - 开车前8天（含）以上退票：不收手续费
                    - 开车前48小时至8天以内退票：收取票面金额5%的手续费
                    - 开车前24小时至48小时以内退票：收取票面金额10%的手续费
                    - 开车前24小时以内退票：收取票面金额20%的手续费
                 
-                2. 退票方式：
+                2. 手续费规则：
+                   - 最低退票费2元
+                   - 金额尾数四舍五入到5角
+                
+                3. 禁止退票场景：
+                   - 列车已经发车
+                   - 开车后改签生成的车票
+                   - 车票已退票/作废
+                
+                4. 退票方式：
                    - 网上购票可在12306官网或APP直接退票
                    - 车站购票需到车站售票窗口退票
                    - 已换取纸质车票的，需到车站窗口办理
                 
-                3. 特殊说明：
-                   - 开车前不足2小时的，不支持网上退票
-                   - 同一订单多人退票，需整单退票
-                   - 退票款将原路返回至支付账户
+                5. 到账时间：
+                   - 退票款将原路返回至支付账户，一般3-7个工作日到账
                 """;
     }
 
@@ -228,27 +235,28 @@ public class TicketBookingTools {
         return """
                 火车票改签规则：
 
-                1. 改签条件：
-                   - 开车前48小时（不含）以上：可改签预售期内的其他列车
-                   - 开车前48小时以内：只能改签开车前的其他列车
-                   - 开车后至当日24小时内：可改签当日其他列车
+                1. 改签基本规则：
+                   - 每张车票仅可改签一次
+                   - 不支持改变出发站
+                   - 开车后改签的车票不支持退票
+                   - 已发车且超过当日24点不可改签
 
-                2. 改签手续费（按距发车时间计算）：
-                   - 距发车48小时以上：免收手续费
-                   - 距发车24小时至48小时：收取原票价5%的手续费
-                   - 距发车不足24小时：收取原票价10%的手续费
+                2. 改签手续费（7档费率，按距发车时间×改签目标计算）：
+                   - 开车前≥48小时：免费
+                   - 开车前24-48小时，改签至原票日期及之前：免费
+                   - 开车前24-48小时，改签至原票日期之后：5%
+                   - 开车前<24小时，改签至原票日期及之前：免费
+                   - 开车前<24小时，改签至原票日期之后：15%
+                   - 开车后改签至当日其他列车：免费
+                   - 开车后改签至次日及以后：40%
+                   - 费率基数 = min(原票价, 新票价)
 
-                3. 改签范围：
-                   - 可改变乘车日期、车次、席别
-                   - 不支持改变出发站和到达站
-                   - 改签后的车票不支持再次改签（每张车票仅可改签一次）
+                3. 票价差额：
+                   - 新票价 > 原票价：需补差价
+                   - 新票价 < 原票价：退还差价
+                   - 改签费与差额独立计算
 
-                4. 票价差额：
-                   - 改签后票价高于原票价的，需补足差额
-                   - 改签后票价低于原票价的，差额部分退回钱包
-                   - 差额与手续费合并计算：多退少补
-
-                5. 办理方式：
+                4. 办理方式：
                    - 网上购票可在App内直接改签
                    - 车站购票需到车站窗口办理
                 """;
@@ -365,7 +373,14 @@ public class TicketBookingTools {
             BigDecimal oldPrice = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
             BigDecimal newPrice = getPriceBySeatType(newTrain, finalSeatType);
             BigDecimal diff = newPrice.subtract(oldPrice);
-            BigDecimal fee = calculateChangeFee(order, oldPrice);
+
+            LocalDate targetDateForFee = null;
+            if (date != null && !date.isEmpty()) {
+                targetDateForFee = LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            } else if (order.getDepartTime() != null) {
+                targetDateForFee = order.getDepartTime().toLocalDate();
+            }
+            BigDecimal fee = calculateChangeFee(order, oldPrice, newPrice, targetDateForFee);
             BigDecimal finalAmount = diff.add(fee);
 
             StringBuilder sb = new StringBuilder();
@@ -405,8 +420,49 @@ public class TicketBookingTools {
     }
 
     /**
-     * 改签手续费：按原订单发车时间距当前时间计算。
-     * 48h以上免费，24-48h收5%，不足24h收10%。
+     * 改签手续费：7档费率系统
+     * 规则：https://www.12306.cn
+     * - 费率基数 = min(原票价, 新票价)
+     * - 开车前≥48h: 0%
+     * - 开车前24h≤t<48h，改签至原票日期及之前: 0%
+     * - 开车前24h≤t<48h，改签至原票日期之后: 5%
+     * - 开车前t<24h，改签至原票日期及之前: 0%
+     * - 开车前t<24h，改签至原票日期之后: 15%
+     * - 开车后，改签至当日其他列车: 0%
+     * - 开车后，改签至次日及以后: 40%
+     */
+    private BigDecimal calculateChangeFee(Order order, BigDecimal oldPrice, BigDecimal newPrice, LocalDate targetDate) {
+        if (order.getDepartTime() == null || oldPrice == null) return BigDecimal.ZERO;
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime departTime = order.getDepartTime();
+        boolean isAfterDepart = now.isAfter(departTime);
+        long hoursToDepart = java.time.Duration.between(now, departTime).toHours();
+
+        LocalDate originalDate = departTime.toLocalDate();
+        boolean targetAfterOriginal = targetDate != null && targetDate.isAfter(originalDate);
+
+        BigDecimal feeBase = oldPrice.min(newPrice);
+        BigDecimal rate = BigDecimal.ZERO;
+
+        if (isAfterDepart) {
+            rate = targetAfterOriginal ? new BigDecimal("0.40") : BigDecimal.ZERO;
+        } else if (hoursToDepart >= 48) {
+            rate = BigDecimal.ZERO;
+        } else if (hoursToDepart >= 24) {
+            rate = targetAfterOriginal ? new BigDecimal("0.05") : BigDecimal.ZERO;
+        } else {
+            rate = targetAfterOriginal ? new BigDecimal("0.15") : BigDecimal.ZERO;
+        }
+
+        BigDecimal fee = feeBase.multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP);
+        log.info("改签费计算: oldPrice={}, newPrice={}, targetDate={}, hoursToDepart={}, isAfterDepart={}, rate={}, fee={}",
+                oldPrice, newPrice, targetDate, hoursToDepart, isAfterDepart, rate, fee);
+        return fee;
+    }
+
+    /**
+     * 旧版改签费（兼容）
      */
     private BigDecimal calculateChangeFee(Order order, BigDecimal oldPrice) {
         if (order.getDepartTime() == null || oldPrice == null) return BigDecimal.ZERO;
@@ -802,20 +858,32 @@ public class TicketBookingTools {
             Order order = resolveOrderForOperation(orderNumber, "退票");
             if (order == null) return "未找到可退票的订单。";
 
-            if (order.getStatus() != null && order.getStatus() != 1) {
+            if (order.getStatus() != null && order.getStatus() != 1 && order.getStatus() != 2) {
                 return "当前订单状态不支持退票。订单状态：" + orderStatusText(order.getStatus());
             }
 
-            orderService.refundOrder(order.getOrderNumber());
+            // 列车已发车拦截
+            if (order.getDepartTime() != null && java.time.LocalDateTime.now().isAfter(order.getDepartTime())) {
+                return "列车已于" + order.getDepartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) + "发车，不允许退票。";
+            }
 
-            BigDecimal refundFee = order.getTotalAmount() != null ? order.getTotalAmount().multiply(new BigDecimal("0.05")) : BigDecimal.ZERO;
-            BigDecimal refundAmount = order.getTotalAmount() != null ? order.getTotalAmount().subtract(refundFee) : BigDecimal.ZERO;
+            // 开车后改签的车票禁止退票
+            if (order.getRemark() != null && order.getRemark().contains("开车后改签")) {
+                return "开车后改签生成的车票不支持退票。";
+            }
+
+            // 计算退票费（与后端一致）
+            BigDecimal refundFee = calculateRefundFeeForOrder(order);
+            BigDecimal originalAmount = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
+            BigDecimal refundAmount = originalAmount.subtract(refundFee);
+
+            orderService.refundOrder(order.getOrderNumber());
 
             StringBuilder result = new StringBuilder();
             result.append("退票办理成功！\n\n");
             result.append("订单号：").append(order.getOrderNumber() != null ? order.getOrderNumber() : order.getId()).append("\n");
             result.append("车次：").append(order.getTrainNumber()).append("\n");
-            result.append("原票价：¥").append(order.getTotalAmount() != null ? order.getTotalAmount() : 0).append("\n");
+            result.append("原票价：¥").append(originalAmount).append("\n");
             result.append("退票手续费：¥").append(refundFee).append("\n");
             result.append("应退金额：¥").append(refundAmount).append("\n");
             result.append("\n票款将原路返回至支付账户，一般3-7个工作日到账。");
@@ -823,6 +891,47 @@ public class TicketBookingTools {
         } catch (Exception e) {
             return "退票失败：" + e.getMessage();
         }
+    }
+
+    /**
+     * AI侧退票费计算（与OrderServiceImpl保持一致）
+     */
+    private BigDecimal calculateRefundFeeForOrder(Order order) {
+        BigDecimal totalAmount = order.getTotalAmount();
+        if (totalAmount == null || totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.time.LocalDateTime departTime = order.getDepartTime();
+        BigDecimal rate;
+
+        if (departTime != null) {
+            long hoursToDepart = java.time.Duration.between(now, departTime).toHours();
+            long daysToDepart = hoursToDepart / 24;
+
+            if (daysToDepart >= 8) {
+                rate = BigDecimal.ZERO;
+            } else if (hoursToDepart >= 48) {
+                rate = new BigDecimal("0.05");
+            } else if (hoursToDepart >= 24) {
+                rate = new BigDecimal("0.10");
+            } else {
+                rate = new BigDecimal("0.20");
+            }
+        } else {
+            rate = new BigDecimal("0.05");
+        }
+
+        BigDecimal fee = totalAmount.multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP);
+
+        // 最低2元
+        BigDecimal minFee = new BigDecimal("2.00");
+        if (fee.compareTo(minFee) < 0 && fee.compareTo(BigDecimal.ZERO) > 0) {
+            fee = minFee;
+        }
+
+        return fee;
     }
 
     @Tool("办理改签。参数orderNumber可选(订单号或订单ID，不传则自动获取当前用户唯一活跃订单)，newTrainId为新车次ID或车次号(如15或G1601)，seatType可选(新座位类型)，date可选(新日期yyyy-MM-dd)。返回改签办理结果。")
@@ -847,7 +956,14 @@ public class TicketBookingTools {
             BigDecimal oldPrice = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
             BigDecimal newPrice = getPriceBySeatType(newTrain, finalSeatType);
             BigDecimal diff = newPrice.subtract(oldPrice);
-            BigDecimal fee = calculateChangeFee(order, oldPrice);
+
+            LocalDate targetDateForFee = null;
+            if (date != null && !date.isEmpty()) {
+                targetDateForFee = LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            } else if (order.getDepartTime() != null) {
+                targetDateForFee = order.getDepartTime().toLocalDate();
+            }
+            BigDecimal fee = calculateChangeFee(order, oldPrice, newPrice, targetDateForFee);
             BigDecimal finalAmount = diff.add(fee);
 
             try {
