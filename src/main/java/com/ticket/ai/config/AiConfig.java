@@ -62,7 +62,7 @@ public class AiConfig {
     private int milvusDimension;
 
     /**
-     * 配置聊天大模型
+     * 配置聊天大模型（增加超时和重试配置，避免Connection reset）
      */
     @Bean
     public ChatLanguageModel chatLanguageModel() {
@@ -71,11 +71,14 @@ public class AiConfig {
                 .baseUrl(chatBaseUrl)
                 .apiKey(chatApiKey)
                 .modelName(chatModelName)
+                .timeout(java.time.Duration.ofSeconds(60))
+                .maxRetries(3)
+                .temperature(0.7)
                 .build();
     }
 
     /**
-     * 配置Embedding模型
+     * 配置Embedding模型（增加超时配置）
      */
     @Bean
     public EmbeddingModel embeddingModel() {
@@ -84,6 +87,8 @@ public class AiConfig {
                 .baseUrl(embeddingBaseUrl)
                 .apiKey(embeddingApiKey)
                 .modelName(embeddingModelName)
+                .timeout(java.time.Duration.ofSeconds(60))
+                .maxRetries(3)
                 .build();
     }
 

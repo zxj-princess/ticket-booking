@@ -172,8 +172,14 @@ public class AiChatServiceImpl implements AiChatService {
                         reply = fallbackChat(message, userId, sessionId);
                     }
                 } catch (Exception e) {
-                    log.error("AI Agent调用失败，降级到工具模式", e);
-                    reply = fallbackChat(message, userId, sessionId);
+                    log.error("AI Agent调用失败，降级到工具模式: {}", e.getMessage());
+                    // 如果是网络连接错误，尝试降级到规则查询
+                    if (isNetworkError(e)) {
+                        log.warn("网络连接异常，尝试降级到本地规则查询");
+                        reply = handleNetworkErrorFallback(message, lower);
+                    } else {
+                        reply = fallbackChat(message, userId, sessionId);
+                    }
                 }
             } else {
                 // 明确的业务操作 -> 走 fallbackChat
@@ -271,6 +277,47 @@ public class AiChatServiceImpl implements AiChatService {
         }
 
         return false;
+    }
+
+    /**
+     * 判断是否为网络连接类异常
+     */
+    private boolean isNetworkError(Exception e) {
+        if (e == null) return false;
+        String msg = e.getMessage();
+        if (msg == null) msg = "";
+        return msg.contains("Connection reset") || msg.contains("Connection refused") ||
+                msg.contains("timeout") || msg.contains("Timed out") ||
+                msg.contains("UnknownHost") || msg.contains("unreachable") ||
+                e.getCause() != null && e.getCause().getMessage() != null &&
+                e.getCause().getMessage().contains("Connection");
+    }
+
+    /**
+     * 网络异常时的降级处理：返回本地规则，不调用AI
+     */
+    private String handleNetworkErrorFallback(String message, String lower) {
+        StringBuilder sb = new StringBuilder();
+
+        // 根据关键词返回本地规则
+        if (lower.contains("退票") || lower.contains("退款")) {
+            sb.append(ticketBookingTools.getRefundRules());
+        } else if (lower.contains("改签") || lower.contains("改期")) {
+            sb.append(ticketBookingTools.getChangeRules());
+        } else if (lower.contains("学生")) {
+            sb.append(ticketBookingTools.getStudentTicketRules());
+        } else if (lower.contains("儿童")) {
+            sb.append(ticketBookingTools.getChildTicketRules());
+        } else {
+            sb.append("抱歉，AI服务暂时不可用（网络连接异常）。\n\n");
+            sb.append("您可以尝试以下操作：\n");
+            sb.append("- 询问退票规则、改签规则、学生票、儿童票等常见问题\n");
+            sb.append("- 查询车次、订票、退票、改签等业务操作\n");
+            sb.append("- 稍后重试AI对话功能\n\n");
+            sb.append("如需人工帮助，请联系客服。");
+        }
+
+        return sb.toString();
     }
 
     private boolean isResponseEmptyOrGeneric(String reply, String originalMessage) {
@@ -440,7 +487,6 @@ public class AiChatServiceImpl implements AiChatService {
                         clearChangeFlow(sessionId, userId);
                         break;
                 }
-            }
 
             } else if (hasChange) {
                 // 检查用户是要改签还是只是问改签规则
