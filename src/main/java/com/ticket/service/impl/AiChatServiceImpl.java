@@ -162,8 +162,11 @@ public class AiChatServiceImpl implements AiChatService {
             if (isKnowledgeQuery || !isBusinessAction) {
                 // 知识问答或通用问题 -> 走 AI Agent
                 try {
+                    // 设置当前对话的用户ID到工具类，解决LangChain4j异步调用ThreadLocal丢失问题
+                    ticketBookingTools.setCurrentUserId(userId);
+
                     int memoryId = Math.abs((sessionId + userId).hashCode());
-                    log.info("调用AI Agent(知识问答), sessionId={}, memoryId={}", sessionId, memoryId);
+                    log.info("调用AI Agent(知识问答), sessionId={}, memoryId={}, userId={}", sessionId, memoryId, userId);
                     reply = ticketBookingAgent.chat(memoryId, message);
                     log.info("AI Agent回复: {}", reply);
 
@@ -180,6 +183,9 @@ public class AiChatServiceImpl implements AiChatService {
                     } else {
                         reply = fallbackChat(message, userId, sessionId);
                     }
+                } finally {
+                    // 清除用户ID，防止内存泄漏
+                    ticketBookingTools.setCurrentUserId(null);
                 }
             } else {
                 // 明确的业务操作 -> 走 fallbackChat

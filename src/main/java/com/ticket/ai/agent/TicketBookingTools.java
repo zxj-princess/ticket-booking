@@ -29,6 +29,28 @@ import java.util.stream.Collectors;
 @Component
 public class TicketBookingTools {
 
+    /**
+     * 当前AI对话的用户ID（解决LangChain4j异步调用导致ThreadLocal丢失的问题）
+     */
+    private Long currentUserId;
+
+    /**
+     * 设置当前AI对话的用户ID，在Agent调用前设置，调用后清除
+     */
+    public void setCurrentUserId(Long userId) {
+        this.currentUserId = userId;
+    }
+
+    /**
+     * 获取当前AI对话的用户ID，优先使用保存的ID，回退到UserContext
+     */
+    private Long getCurrentUserId() {
+        if (currentUserId != null) {
+            return currentUserId;
+        }
+        return UserContext.getUserId();
+    }
+
     @Autowired
     private TrainService trainService;
 
@@ -603,7 +625,7 @@ public class TicketBookingTools {
             }
             if (train == null) return "未找到对应车次「" + trainId + "」，请确认车次信息是否正确。";
 
-            Long userId = UserContext.getUserId();
+            Long userId = getCurrentUserId();
             if (userId == null) return "请先登录后再订票。";
 
             List<Passenger> passengers = passengerMapper.selectList(
@@ -698,7 +720,7 @@ public class TicketBookingTools {
     @Tool("查询当前用户的乘客列表。无需传参，自动获取当前登录用户的所有乘客信息（姓名、证件号、手机号等）。")
     public String listMyPassengers() {
         try {
-            Long userId = UserContext.getUserId();
+            Long userId = getCurrentUserId();
             if (userId == null) return "请先登录后再查询乘客信息。";
 
             List<Passenger> passengers = passengerMapper.selectList(
@@ -726,7 +748,7 @@ public class TicketBookingTools {
     @Tool("查询当前用户的火车票订单列表，包括订单状态、车次、时间、乘客等信息。无需传参，自动获取当前登录用户。")
     public String queryUserOrders() {
         try {
-            Long userId = UserContext.getUserId();
+            Long userId = getCurrentUserId();
             if (userId == null) return "请先登录后再查询订单。";
 
             orderService.autoCompletePastOrders();
@@ -928,7 +950,7 @@ public class TicketBookingTools {
             return order;
         }
 
-        Long userId = UserContext.getUserId();
+        Long userId = getCurrentUserId();
         if (userId == null) {
             throw new RuntimeException("请先登录后再办理" + operation + "。");
         }
@@ -969,7 +991,7 @@ public class TicketBookingTools {
      */
     public String getActiveOrderForChange() {
         try {
-            Long userId = UserContext.getUserId();
+            Long userId = getCurrentUserId();
             if (userId == null) return "FAIL:请先登录后再办理改签。";
 
             orderService.autoCompletePastOrders();
