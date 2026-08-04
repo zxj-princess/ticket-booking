@@ -691,16 +691,30 @@ public class TicketBookingTools {
 
             try {
                 java.time.LocalDate today = java.time.LocalDate.now();
+                java.time.LocalDate targetDate = today;
+
                 if (date != null && !date.isEmpty()) {
-                    today = java.time.LocalDate.parse(date, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                    try {
+                        targetDate = java.time.LocalDate.parse(date, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                        // 如果日期年份明显不对（比如用了2023年，但现在是2026年），自动修正为当前年份
+                        if (targetDate.getYear() < today.getYear()) {
+                            targetDate = targetDate.withYear(today.getYear());
+                            log.info("日期年份已修正为: {}", targetDate);
+                        }
+                    } catch (Exception e) {
+                        targetDate = today;
+                    }
                 }
+
                 java.time.LocalTime departTime = java.time.LocalTime.parse(train.getDepartTime(), java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
                 java.time.LocalTime arriveTime = java.time.LocalTime.parse(train.getArriveTime(), java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-                order.setDepartTime(java.time.LocalDateTime.of(today, departTime));
-                order.setArriveTime(java.time.LocalDateTime.of(today, arriveTime));
+                order.setDepartTime(java.time.LocalDateTime.of(targetDate, departTime));
+                order.setArriveTime(java.time.LocalDateTime.of(targetDate, arriveTime));
+                log.info("订单发车时间: {}", order.getDepartTime());
             } catch (Exception e) {
                 order.setDepartTime(java.time.LocalDateTime.now());
                 order.setArriveTime(java.time.LocalDateTime.now().plusMinutes(train.getDuration() != null ? train.getDuration() : 60));
+                log.warn("日期设置异常，使用当前时间: {}", e.getMessage());
             }
 
             orderService.createOrder(order);
