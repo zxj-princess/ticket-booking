@@ -8,7 +8,7 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
-import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import dev.langchain4j.data.segment.TextSegment;
 import com.ticket.ai.agent.TicketBookingAgent;
 import com.ticket.ai.agent.TicketBookingTools;
@@ -49,6 +49,18 @@ public class AiConfig {
     @Value("${ai.embedding-model.base-url}")
     private String embeddingBaseUrl;
 
+    @Value("${ai.vector-store.milvus.host:localhost}")
+    private String milvusHost;
+
+    @Value("${ai.vector-store.milvus.port:19530}")
+    private int milvusPort;
+
+    @Value("${ai.vector-store.milvus.collection-name:ticket_knowledge}")
+    private String milvusCollectionName;
+
+    @Value("${ai.vector-store.milvus.dimension:1536}")
+    private int milvusDimension;
+
     /**
      * 配置聊天大模型
      */
@@ -76,12 +88,17 @@ public class AiConfig {
     }
 
     /**
-     * 配置向量存储（默认使用内存存储，可配置Milvus）
+     * 配置向量存储（使用Milvus向量数据库）
      */
     @Bean
     public EmbeddingStore<TextSegment> embeddingStore() {
-        log.info("使用内存向量存储");
-        return new InMemoryEmbeddingStore<>();
+        log.info("初始化Milvus向量存储: {}:{} / collection={} / dimension={}", milvusHost, milvusPort, milvusCollectionName, milvusDimension);
+        return MilvusEmbeddingStore.builder()
+                .host(milvusHost)
+                .port(milvusPort)
+                .collectionName(milvusCollectionName)
+                .dimension(milvusDimension)
+                .build();
     }
 
     /**

@@ -13,7 +13,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/ticket_booking?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
     username: root
-    password: root
+    password: 123456
 
   # 数据库自动初始化
   sql:
@@ -49,14 +49,14 @@ ai:
   # 大模型API配置
   chat-model:
     provider: dashscope  # dashscope | openai
-    api-key:
+    api-key: ${DASHSCOPE_API_KEY:}  # 环境变量，直接运行请填写真实key
     model-name: qwen-max
     base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
   
   # 向量模型配置
   embedding-model:
     provider: dashscope
-    api-key:
+    api-key: ${DASHSCOPE_API_KEY:}  # 环境变量，直接运行请填写真实key
     model-name: text-embedding-v2
     base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
   
@@ -66,6 +66,7 @@ ai:
       host: localhost
       port: 19530
       collection-name: ticket_knowledge
+      dimension: 1536
   
   # AI Agent配置
   agent:
