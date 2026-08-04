@@ -49,14 +49,14 @@ ai:
   # 大模型API配置
   chat-model:
     provider: dashscope  # dashscope | openai
-    api-key: ${DASHSCOPE_API_KEY:}  # 环境变量，直接运行请填写真实key
+    api-key: sk-ws-H.EIIXLIR.OQr1.MEUCIHmLESI85xKHGwGBxBWRO-Ytds8rzUGpk9SL2hPslr4AAiEAgVKlfi_o9oiI_yNQzheArldCWxiiLwVrRsRYwf_B1as
     model-name: qwen-max
     base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
   
   # 向量模型配置
   embedding-model:
     provider: dashscope
-    api-key: ${DASHSCOPE_API_KEY:}  # 环境变量，直接运行请填写真实key
+    api-key: sk-ws-H.EIIXLIR.OQr1.MEUCIHmLESI85xKHGwGBxBWRO-Ytds8rzUGpk9SL2hPslr4AAiEAgVKlfi_o9oiI_yNQzheArldCWxiiLwVrRsRYwf_B1as
     model-name: text-embedding-v2
     base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
   
