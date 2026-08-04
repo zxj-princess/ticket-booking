@@ -139,21 +139,8 @@ public class AiChatServiceImpl implements AiChatService {
 
         String reply;
         String lower = message.toLowerCase();
-        boolean hasActionIntent = lower.contains("查") || lower.contains("查询") || lower.contains("高铁") ||
-                lower.contains("火车") || lower.contains("车票") || lower.contains("班次") ||
-                lower.contains("订单") || lower.contains("订票") || lower.contains("买票") ||
-                lower.contains("改签") || lower.contains("改期") || lower.contains("退票") ||
-                lower.contains("退款") || lower.contains("票价") || lower.contains("多少钱") ||
-                lower.contains("价格") || lower.contains("订票记录") || lower.contains("我的订票") ||
-                lower.contains("我的订单") || lower.contains("购买") ||
-                lower.contains("确认") || lower.contains("确定") || lower.equals("是") ||
-                lower.contains("好的") || lower.equals("行") || lower.equals("yes") || lower.equals("y") ||
-                lower.contains("取消") || lower.contains("放弃") || lower.contains("终止") || lower.contains("no");
 
-        boolean hasTrainNumber = extractTrainNumber(message) != null || extractTrainId(message) != null;
-
-        boolean isActionQuery = hasActionIntent || hasTrainNumber;
-
+        // 检查是否有未完成的改签流程
         boolean hasPendingFlow = false;
         BookingContext preCheckCtx = getContext(sessionId, userId);
         if (preCheckCtx != null && preCheckCtx.changeFlow != null) {
@@ -163,21 +150,33 @@ public class AiChatServiceImpl implements AiChatService {
             }
         }
 
-        if (isActionQuery || hasPendingFlow) {
+        if (hasPendingFlow) {
             reply = fallbackChat(message, userId, sessionId);
         } else {
-            try {
-                int memoryId = Math.abs((sessionId + userId).hashCode());
-                log.info("调用AI Agent, sessionId={}, memoryId={}", sessionId, memoryId);
-                reply = ticketBookingAgent.chat(memoryId, message);
-                log.info("AI Agent回复: {}", reply);
+            // 检查是否为知识问答类请求（只问规则/政策/流程，不操作）
+            boolean isKnowledgeQuery = isKnowledgeQuery(message, lower);
 
-                if (isResponseEmptyOrGeneric(reply, message)) {
-                    log.info("AI Agent回复无效，降级到工具模式");
+            // 检查是否为明确的业务操作请求
+            boolean isBusinessAction = isBusinessAction(message, lower);
+
+            if (isKnowledgeQuery || !isBusinessAction) {
+                // 知识问答或通用问题 -> 走 AI Agent
+                try {
+                    int memoryId = Math.abs((sessionId + userId).hashCode());
+                    log.info("调用AI Agent(知识问答), sessionId={}, memoryId={}", sessionId, memoryId);
+                    reply = ticketBookingAgent.chat(memoryId, message);
+                    log.info("AI Agent回复: {}", reply);
+
+                    if (isResponseEmptyOrGeneric(reply, message)) {
+                        log.info("AI Agent回复无效，降级到工具模式");
+                        reply = fallbackChat(message, userId, sessionId);
+                    }
+                } catch (Exception e) {
+                    log.error("AI Agent调用失败，降级到工具模式", e);
                     reply = fallbackChat(message, userId, sessionId);
                 }
-            } catch (Exception e) {
-                log.error("AI Agent调用失败，降级到工具模式", e);
+            } else {
+                // 明确的业务操作 -> 走 fallbackChat
                 reply = fallbackChat(message, userId, sessionId);
             }
         }
@@ -193,6 +192,85 @@ public class AiChatServiceImpl implements AiChatService {
         aiChatRecordMapper.insert(aiRecord);
 
         return aiRecord;
+    }
+
+    /**
+     * 判断是否为知识问答类请求（用户只想了解规则/政策/流程，不涉及具体操作）
+     * 关键特征：消息中没有明确的操作动词，而是询问性质
+     */
+    private boolean isKnowledgeQuery(String message, String lower) {
+        // 知识问答关键词
+        boolean hasKnowledgeKeywords = lower.contains("规则") || lower.contains("政策") ||
+                lower.contains("规定") || lower.contains("流程") ||
+                lower.contains("怎么") || lower.contains("如何") ||
+                lower.contains("什么") || lower.contains("哪些") ||
+                lower.contains("收费") || lower.contains("手续费") ||
+                lower.contains("限制") || lower.contains("条件") ||
+                lower.contains("优惠") || lower.contains("学生票") ||
+                lower.contains("儿童票") || lower.contains("军残") ||
+                lower.contains("丢失") || lower.contains("退钱");
+
+        // 如果有明确的操作动词，则不是知识问答
+        boolean hasExplicitAction = lower.contains("我要") || lower.contains("帮我") ||
+                lower.contains("给我") || lower.contains("办理") ||
+                lower.contains("立刻") || lower.contains("马上") ||
+                lower.contains("请") && (lower.contains("退票") || lower.contains("改签") || lower.contains("订票") || lower.contains("买"));
+
+        // "退票规则是什么" → 知识问答（有规则关键词，无操作动词）
+        // "我要退票" → 业务操作（有操作动词）
+        if (hasKnowledgeKeywords && !hasExplicitAction) {
+            return true;
+        }
+
+        // 单独的短查询："退票规则"、"改签流程"、"学生票购买"等
+        String trimmed = lower.trim();
+        String[] knowledgePhrases = {"退票规则", "改签规则", "改签流程", "退票流程",
+                "学生票", "儿童票", "怎么买", "怎么退", "退钱", "丢失", "军残",
+                "怎么订", "怎么改", "怎么操作", "规定"};
+        for (String phrase : knowledgePhrases) {
+            if (trimmed.equals(phrase) || trimmed.contains(phrase)) {
+                // 再次确认没有操作动词
+                if (!lower.contains("我要") && !lower.contains("帮我") && !lower.contains("办理")) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 判断是否为明确的业务操作请求（用户明确要执行订票/退票/改签等操作）
+     */
+    private boolean isBusinessAction(String message, String lower) {
+        // 有明确的操作意图
+        boolean hasActionVerb = lower.contains("我要") || lower.contains("帮我") ||
+                lower.contains("给我") || lower.contains("办理") ||
+                lower.contains("订票") || lower.contains("买票") ||
+                lower.contains("购买") || lower.contains("退票") ||
+                lower.contains("改签") || lower.contains("改期") ||
+                lower.contains("退款") || lower.contains("退订") ||
+                lower.contains("确认") || lower.contains("确定");
+
+        boolean hasSpecificTarget = lower.contains("车次") || lower.contains("订单") ||
+                lower.contains("车票") || lower.contains("高铁") ||
+                lower.contains("火车") || lower.contains("票价") ||
+                lower.contains("多少钱") || lower.contains("价格") ||
+                lower.contains("北京") || lower.contains("上海") ||
+                lower.contains("广州") || lower.contains("深圳") ||
+                lower.contains("杭州") || lower.contains("成都") ||
+                // 更多城市
+                lower.contains("到") || lower.contains("→") || lower.contains("->");
+
+        // 有操作动词 + 具体目标 → 明确业务操作
+        // 或者消息很短但包含操作动词
+        if (hasActionVerb) {
+            // "我要退票" → 是业务操作
+            // "退票规则" → 已被 isKnowledgeQuery 先拦截
+            return true;
+        }
+
+        return false;
     }
 
     private boolean isResponseEmptyOrGeneric(String reply, String originalMessage) {
@@ -364,7 +442,26 @@ public class AiChatServiceImpl implements AiChatService {
                 }
             }
 
-            if (hasChange) {
+            } else if (hasChange) {
+                // 检查用户是要改签还是只是问改签规则
+                boolean isChangeAction = lower.contains("我要") || lower.contains("帮我") ||
+                        lower.contains("给我") || lower.contains("办理") ||
+                        lower.contains("立刻") || lower.contains("马上");
+
+                boolean isChangeRuleQuery = lower.contains("规则") || lower.contains("政策") ||
+                        lower.contains("规定") || lower.contains("流程") ||
+                        lower.contains("怎么") || lower.contains("如何") ||
+                        lower.contains("什么") || lower.contains("哪些") ||
+                        lower.contains("收费") || lower.contains("手续费") ||
+                        lower.contains("限制") || lower.contains("条件") ||
+                        lower.contains("多少");
+
+                if (isChangeRuleQuery && !isChangeAction) {
+                    // 用户问改签规则，只返回规则说明
+                    toolResults.append(ticketBookingTools.getChangeRules());
+                    return toolResults.toString();
+                }
+
                 String orderNum = extractOrderNumber(message);
                 String date = extractDate(message);
                 String timePeriod = extractTimePeriod(message);
@@ -452,11 +549,35 @@ public class AiChatServiceImpl implements AiChatService {
                     return toolResults.toString();
                 }
             } else if (hasRefund) {
-                String orderNum = extractOrderNumber(message);
-                if (orderNum != null) {
-                    toolResults.append(ticketBookingTools.processRefund(orderNum));
+                // 检查用户是要退票还是只是问退票规则
+                boolean isRefundAction = lower.contains("我要") || lower.contains("帮我") ||
+                        lower.contains("给我") || lower.contains("办理") ||
+                        lower.contains("立刻") || lower.contains("马上") ||
+                        lower.contains("确定") || lower.contains("确认");
+
+                boolean isRefundRuleQuery = lower.contains("规则") || lower.contains("政策") ||
+                        lower.contains("规定") || lower.contains("流程") ||
+                        lower.contains("怎么") || lower.contains("如何") ||
+                        lower.contains("什么") || lower.contains("哪些") ||
+                        lower.contains("收费") || lower.contains("手续费") ||
+                        lower.contains("限制") || lower.contains("条件") ||
+                        lower.contains("多少");
+
+                if (isRefundRuleQuery && !isRefundAction) {
+                    // 用户问退票规则，只返回规则说明，不调用退票
+                    toolResults.append(ticketBookingTools.getRefundRules());
+                } else if (isRefundAction) {
+                    // 用户明确要退票
+                    String orderNum = extractOrderNumber(message);
+                    if (orderNum != null) {
+                        toolResults.append(ticketBookingTools.processRefund(orderNum));
+                    } else {
+                        toolResults.append(ticketBookingTools.processRefund(null));
+                    }
                 } else {
-                    toolResults.append(ticketBookingTools.processRefund(null));
+                    // 模糊意图，默认返回规则（安全优先）
+                    toolResults.append(ticketBookingTools.getRefundRules());
+                    toolResults.append("\n\n如需办理退票，请回复「我要退票」。");
                 }
             } else if (hasOrderQuery) {
                 toolResults.append(ticketBookingTools.queryUserOrders());
