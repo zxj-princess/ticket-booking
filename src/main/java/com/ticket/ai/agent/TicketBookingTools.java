@@ -15,6 +15,8 @@ import com.ticket.service.OrderService;
 import com.ticket.service.StationService;
 import com.ticket.service.TrainService;
 import dev.langchain4j.agent.tool.Tool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +30,8 @@ import java.util.stream.Collectors;
 
 @Component
 public class TicketBookingTools {
+
+    private static final Logger log = LoggerFactory.getLogger(TicketBookingTools.class);
 
     /**
      * 当前AI对话的用户ID（解决LangChain4j异步调用导致ThreadLocal丢失的问题）
@@ -612,6 +616,8 @@ public class TicketBookingTools {
     @Tool("为用户预订火车票。参数trainId为车次ID或车次号(如15或G1601)，seatType为座位类型(0商务座/1一等座/2二等座/3软卧/4硬卧/5硬座)，passengerName可选(乘客姓名，不填则自动选择唯一乘客)，date为出发日期(yyyy-MM-dd)。系统自动获取当前用户和乘客信息。返回订单创建结果。")
     public String bookTicket(String trainId, Integer seatType, String passengerName, String date) {
         try {
+            log.info("bookTicket called: trainId={}, seatType={}, passengerName={}, date={}", trainId, seatType, passengerName, date);
+
             if (trainId == null || trainId.isEmpty()) return "请提供有效的车次ID或车次号。";
 
             Train train = null;
@@ -626,6 +632,7 @@ public class TicketBookingTools {
             if (train == null) return "未找到对应车次「" + trainId + "」，请确认车次信息是否正确。";
 
             Long userId = getCurrentUserId();
+            log.info("bookTicket userId={}, currentUserId={}", userId, currentUserId);
             if (userId == null) return "请先登录后再订票。";
 
             List<Passenger> passengers = passengerMapper.selectList(
@@ -721,6 +728,7 @@ public class TicketBookingTools {
     public String listMyPassengers() {
         try {
             Long userId = getCurrentUserId();
+            log.info("listMyPassengers: userId={}, currentUserId={}", userId, currentUserId);
             if (userId == null) return "请先登录后再查询乘客信息。";
 
             List<Passenger> passengers = passengerMapper.selectList(
@@ -729,6 +737,7 @@ public class TicketBookingTools {
                     .eq(Passenger::getDeleted, 0)
             );
 
+            log.info("listMyPassengers: found {} passengers for userId={}", passengers.size(), userId);
             if (passengers.isEmpty()) return "您还没有添加乘客，请先到「个人中心-乘客管理」添加乘客信息。";
 
             StringBuilder result = new StringBuilder();
