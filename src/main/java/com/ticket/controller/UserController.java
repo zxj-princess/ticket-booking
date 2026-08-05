@@ -71,16 +71,14 @@ public class UserController {
         }
 
         if (userId != null) {
-            // 退出登录时清空AI聊天记录和乘客信息
-            LambdaUpdateWrapper<AiChatRecord> chatWrapper = new LambdaUpdateWrapper<>();
-            chatWrapper.eq(AiChatRecord::getUserId, userId)
-                    .set(AiChatRecord::getDeleted, 1);
-            aiChatRecordMapper.update(null, chatWrapper);
+            // 退出登录时物理清空AI聊天记录和乘客信息
+            LambdaQueryWrapper<AiChatRecord> chatWrapper = new LambdaQueryWrapper<>();
+            chatWrapper.eq(AiChatRecord::getUserId, userId);
+            aiChatRecordMapper.delete(chatWrapper);
 
-            LambdaUpdateWrapper<Passenger> passengerWrapper = new LambdaUpdateWrapper<>();
-            passengerWrapper.eq(Passenger::getUserId, userId)
-                    .set(Passenger::getDeleted, 1);
-            passengerMapper.update(null, passengerWrapper);
+            LambdaQueryWrapper<Passenger> passengerWrapper = new LambdaQueryWrapper<>();
+            passengerWrapper.eq(Passenger::getUserId, userId);
+            passengerMapper.delete(passengerWrapper);
         }
         return R.success();
     }

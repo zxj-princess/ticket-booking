@@ -76,20 +76,20 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("账号已被禁用");
         }
 
-        // 每次登录清空当前用户的AI聊天记录和乘客信息
+        // 每次登录物理清空当前用户的AI聊天记录和乘客信息
         Long userId = user.getId();
 
-        // 清空AI聊天记录（逻辑删除）
-        LambdaUpdateWrapper<AiChatRecord> chatWrapper = new LambdaUpdateWrapper<>();
-        chatWrapper.eq(AiChatRecord::getUserId, userId)
-                .set(AiChatRecord::getDeleted, 1);
-        aiChatRecordMapper.update(null, chatWrapper);
+        // 物理删除AI聊天记录（确保彻底清空）
+        AiChatRecord chatExample = new AiChatRecord();
+        chatExample.setUserId(userId);
+        aiChatRecordMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AiChatRecord>()
+                .eq(AiChatRecord::getUserId, userId));
 
-        // 清空乘客信息（逻辑删除）
-        LambdaUpdateWrapper<Passenger> passengerWrapper = new LambdaUpdateWrapper<>();
-        passengerWrapper.eq(Passenger::getUserId, userId)
-                .set(Passenger::getDeleted, 1);
-        passengerMapper.update(null, passengerWrapper);
+        // 物理删除乘客信息（确保彻底清空）
+        Passenger passengerExample = new Passenger();
+        passengerExample.setUserId(userId);
+        passengerMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Passenger>()
+                .eq(Passenger::getUserId, userId));
 
         return generateToken(user);
     }
