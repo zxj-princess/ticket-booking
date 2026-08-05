@@ -1,9 +1,12 @@
 package com.ticket.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ticket.common.exception.BusinessException;
+import com.ticket.entity.Order;
 import com.ticket.entity.User;
+import com.ticket.mapper.OrderMapper;
 import com.ticket.mapper.UserMapper;
 import com.ticket.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +26,9 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private UserMapper userMapper;
 
+    @Autowired
+    private OrderMapper orderMapper;
+
     @Override
     public User register(User user) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
@@ -35,6 +41,12 @@ public class UserServiceImpl implements UserService {
         user.setStatus(1);
         user.setRole(0);
         userMapper.insert(user);
+
+        // 注册新账号时清空所有订单（逻辑删除）
+        LambdaUpdateWrapper<Order> clearWrapper = new LambdaUpdateWrapper<>();
+        clearWrapper.set(Order::getDeleted, 1);
+        orderMapper.update(null, clearWrapper);
+
         return user;
     }
 
