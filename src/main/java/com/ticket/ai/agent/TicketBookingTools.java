@@ -669,7 +669,7 @@ public class TicketBookingTools {
         return map;
     }
 
-    @Tool("为用户预订火车票。参数trainId为车次ID或车次号(如15或G1601)，seatType为座位类型(0商务座/1一等座/2二等座/3软卧/4硬卧/5硬座)，passengerName可选(乘客姓名，不填则自动选择唯一乘客)，date为出发日期(yyyy-MM-dd)。系统自动获取当前用户和乘客信息。返回订单创建结果。")
+    @Tool("为用户预订火车票。参数trainId为车次ID或车次号(如15或G1601)，seatType为座位类型(0商务座/1一等座/2二等座/3软卧/4硬卧/5硬座)，passengerName可选(乘客姓名，不填则自动选择第一个乘客)，date为出发日期(yyyy-MM-dd)。系统自动获取当前用户和乘客信息。返回订单创建结果。")
     public String bookTicket(String trainId, Integer seatType, String passengerName, String date) {
         try {
             log.info("bookTicket called: trainId={}, seatType={}, passengerName={}, date={}", trainId, seatType, passengerName, date);
@@ -702,26 +702,24 @@ public class TicketBookingTools {
             }
 
             Passenger selectedPassenger = null;
+            String actualPassengerName = passengerName;
+
             if (passengerName != null && !passengerName.isEmpty()) {
                 selectedPassenger = passengers.stream()
                     .filter(p -> p.getName().equals(passengerName))
                     .findFirst()
                     .orElse(null);
                 if (selectedPassenger == null) {
-                    StringBuilder sb = new StringBuilder("未找到名为「").append(passengerName).append("」的乘客。您的乘客列表：\n");
-                    for (Passenger p : passengers) {
-                        sb.append("- ").append(p.getName()).append("（").append(p.getType() == 0 ? "成人" : "学生").append("）\n");
-                    }
-                    return sb.toString();
+                    // 指定的乘客找不到，自动使用第一个乘客
+                    selectedPassenger = passengers.get(0);
+                    actualPassengerName = selectedPassenger.getName();
+                    log.info("指定乘客[{}]不存在，自动使用第一个乘客[{}]", passengerName, actualPassengerName);
                 }
-            } else if (passengers.size() == 1) {
-                selectedPassenger = passengers.get(0);
             } else {
-                StringBuilder sb = new StringBuilder("您有多位乘客，请指定乘客姓名：\n");
-                for (Passenger p : passengers) {
-                    sb.append("- ").append(p.getName()).append("（").append(p.getType() == 0 ? "成人" : "学生").append("）\n");
-                }
-                return sb.toString();
+                // 未指定乘客，直接使用第一个乘客
+                selectedPassenger = passengers.get(0);
+                actualPassengerName = selectedPassenger.getName();
+                log.info("未指定乘客，自动使用第一个乘客[{}]", actualPassengerName);
             }
 
             int finalSeatType = seatType != null ? seatType : 2;
