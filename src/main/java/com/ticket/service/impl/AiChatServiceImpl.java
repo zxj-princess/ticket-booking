@@ -605,7 +605,8 @@ public class AiChatServiceImpl implements AiChatService {
                 boolean isRefundAction = lower.contains("我要") || lower.contains("帮我") ||
                         lower.contains("给我") || lower.contains("办理") ||
                         lower.contains("立刻") || lower.contains("马上") ||
-                        lower.contains("确定") || lower.contains("确认");
+                        lower.contains("确定") || lower.contains("确认") ||
+                        lower.contains("直接") || lower.contains("立即");
 
                 boolean isRefundRuleQuery = lower.contains("规则") || lower.contains("政策") ||
                         lower.contains("规定") || lower.contains("流程") ||
@@ -615,12 +616,15 @@ public class AiChatServiceImpl implements AiChatService {
                         lower.contains("限制") || lower.contains("条件") ||
                         lower.contains("多少");
 
-                if (isRefundRuleQuery && !isRefundAction) {
+                // 如果消息中包含订单号（TK开头或纯数字），视为明确退票操作
+                String orderNum = extractOrderNumber(message);
+                boolean hasOrderRefInMessage = orderNum != null;
+
+                if (isRefundRuleQuery && !isRefundAction && !hasOrderRefInMessage) {
                     // 用户问退票规则，只返回规则说明，不调用退票
                     toolResults.append(ticketBookingTools.getRefundRules());
-                } else if (isRefundAction) {
-                    // 用户明确要退票
-                    String orderNum = extractOrderNumber(message);
+                } else if (isRefundAction || hasOrderRefInMessage) {
+                    // 用户明确要退票，或退票后面带了订单号
                     if (orderNum != null) {
                         toolResults.append(ticketBookingTools.processRefund(orderNum));
                     } else {
@@ -629,7 +633,7 @@ public class AiChatServiceImpl implements AiChatService {
                 } else {
                     // 模糊意图，默认返回规则（安全优先）
                     toolResults.append(ticketBookingTools.getRefundRules());
-                    toolResults.append("\n\n如需办理退票，请回复「我要退票」。");
+                    toolResults.append("\n\n如需办理退票，请回复「我要退票」或「退票+订单号」。");
                 }
             } else if (hasOrderQuery) {
                 toolResults.append(ticketBookingTools.queryUserOrders());
