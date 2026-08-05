@@ -358,6 +358,8 @@ public class AiChatServiceImpl implements AiChatService {
         try {
             boolean hasChange = lower.contains("改签") || lower.contains("改期");
             boolean hasRefund = lower.contains("退票") || lower.contains("退款");
+            boolean hasLostTicket = lower.contains("丢失") || lower.contains("遗失") ||
+                    lower.contains("丢了") || lower.contains("找不到") || lower.contains("不见了");
             boolean hasOrderQuery = lower.contains("我的订单") || lower.contains("订单") ||
                     lower.contains("订票记录") || lower.contains("我的订票");
             boolean hasBook = lower.contains("订票") || lower.contains("买票") ||
@@ -493,6 +495,10 @@ public class AiChatServiceImpl implements AiChatService {
                         clearChangeFlow(sessionId, userId);
                         break;
                 }
+
+            } else if (hasLostTicket) {
+                // 丢失车票相关问题，直接返回知识说明
+                toolResults.append(ticketBookingTools.getLostTicketHelp());
 
             } else if (hasChange) {
                 // 检查用户是要改签还是只是问改签规则
