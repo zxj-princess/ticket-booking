@@ -353,14 +353,10 @@ onMounted(async () => {
         phone: p.phone
       }))
     } else {
-      passengerList.value = userStore.userInfo?.passengers || [
-        { id: 1, name: userStore.userInfo?.nickname || userStore.userInfo?.username || '张三', type: 0, idCard: '110101199001011234', phone: '13800138000' }
-      ]
+      passengerList.value = []
     }
   } catch {
-    passengerList.value = userStore.userInfo?.passengers || [
-      { id: 1, name: userStore.userInfo?.nickname || userStore.userInfo?.username || '张三', type: 0, idCard: '110101199001011234', phone: '13800138000' }
-    ]
+    passengerList.value = []
   }
 })
 </script>
