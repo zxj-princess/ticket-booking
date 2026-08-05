@@ -4,9 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ticket.common.exception.BusinessException;
+import com.ticket.entity.AiChatRecord;
 import com.ticket.entity.Order;
+import com.ticket.entity.Passenger;
 import com.ticket.entity.User;
+import com.ticket.mapper.AiChatRecordMapper;
 import com.ticket.mapper.OrderMapper;
+import com.ticket.mapper.PassengerMapper;
 import com.ticket.mapper.UserMapper;
 import com.ticket.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +32,12 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private OrderMapper orderMapper;
+
+    @Autowired
+    private AiChatRecordMapper aiChatRecordMapper;
+
+    @Autowired
+    private PassengerMapper passengerMapper;
 
     @Override
     public User register(User user) {
@@ -65,6 +75,22 @@ public class UserServiceImpl implements UserService {
         if (user.getStatus() != 1) {
             throw new BusinessException("账号已被禁用");
         }
+
+        // 每次登录清空当前用户的AI聊天记录和乘客信息
+        Long userId = user.getId();
+
+        // 清空AI聊天记录（逻辑删除）
+        LambdaUpdateWrapper<AiChatRecord> chatWrapper = new LambdaUpdateWrapper<>();
+        chatWrapper.eq(AiChatRecord::getUserId, userId)
+                .set(AiChatRecord::getDeleted, 1);
+        aiChatRecordMapper.update(null, chatWrapper);
+
+        // 清空乘客信息（逻辑删除）
+        LambdaUpdateWrapper<Passenger> passengerWrapper = new LambdaUpdateWrapper<>();
+        passengerWrapper.eq(Passenger::getUserId, userId)
+                .set(Passenger::getDeleted, 1);
+        passengerMapper.update(null, passengerWrapper);
+
         return generateToken(user);
     }
 
