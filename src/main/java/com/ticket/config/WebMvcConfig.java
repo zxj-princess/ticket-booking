@@ -18,6 +18,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/user/login",
                         "/user/register",
+                        "/user/logout",
                         "/train/search",
                         "/train/list",
                         "/train/*",

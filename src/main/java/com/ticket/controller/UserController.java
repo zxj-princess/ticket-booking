@@ -1,13 +1,16 @@
 package com.ticket.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ticket.common.result.R;
 import com.ticket.dto.LoginDTO;
 import com.ticket.dto.RegisterDTO;
+import com.ticket.entity.AiChatRecord;
 import com.ticket.entity.Passenger;
 import com.ticket.entity.User;
+import com.ticket.mapper.AiChatRecordMapper;
 import com.ticket.mapper.PassengerMapper;
 import com.ticket.service.UserService;
 import com.ticket.vo.LoginVO;
@@ -29,6 +32,9 @@ public class UserController {
     @Autowired
     private PassengerMapper passengerMapper;
 
+    @Autowired
+    private AiChatRecordMapper aiChatRecordMapper;
+
     @PostMapping("/register")
     public R<UserVO> register(@RequestBody RegisterDTO dto) {
         User user = new User();
@@ -45,6 +51,38 @@ public class UserController {
         vo.setToken(token);
         vo.setUser(convertToVO(user));
         return R.success(vo);
+    }
+
+    @PostMapping("/logout")
+    public R<Void> logout(HttpServletRequest request) {
+        // 从Authorization header中获取token并解析userId
+        String token = request.getHeader("Authorization");
+        Long userId = null;
+        if (token != null && !token.isEmpty()) {
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+            if (token.contains("_")) {
+                try {
+                    userId = Long.parseLong(token.split("_")[0]);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+
+        if (userId != null) {
+            // 退出登录时清空AI聊天记录和乘客信息
+            LambdaUpdateWrapper<AiChatRecord> chatWrapper = new LambdaUpdateWrapper<>();
+            chatWrapper.eq(AiChatRecord::getUserId, userId)
+                    .set(AiChatRecord::getDeleted, 1);
+            aiChatRecordMapper.update(null, chatWrapper);
+
+            LambdaUpdateWrapper<Passenger> passengerWrapper = new LambdaUpdateWrapper<>();
+            passengerWrapper.eq(Passenger::getUserId, userId)
+                    .set(Passenger::getDeleted, 1);
+            passengerMapper.update(null, passengerWrapper);
+        }
+        return R.success();
     }
 
     @GetMapping("/info")
