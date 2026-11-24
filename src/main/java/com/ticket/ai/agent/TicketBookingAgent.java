@@ -123,5 +123,5 @@ public interface TicketBookingAgent {
             """)
     String systemMessage();
 
-    String chat(@MemoryId int memoryId, @UserMessage String message);
+    String chat(@MemoryId String memoryId, @UserMessage String message);
 }

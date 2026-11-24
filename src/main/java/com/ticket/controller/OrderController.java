@@ -48,7 +48,13 @@ public class OrderController {
     @PostMapping("/book")
     public R<OrderVO> bookTicket(@RequestBody BookDTO dto, HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
+        if (dto.getTrainId() == null || dto.getSeatType() == null || dto.getSeatType() < 0 || dto.getSeatType() > 5)
+            throw new BusinessException("请选择有效车次和席别");
+        if (dto.getPassengerIds() == null || dto.getPassengerIds().size() != 1 ||
+            (dto.getSeatCount() != null && dto.getSeatCount() != 1))
+            throw new BusinessException("当前每笔订单支持一位乘客，请分别下单");
         Train train = trainService.getTrainById(dto.getTrainId());
+        if (!Integer.valueOf(1).equals(train.getStatus())) throw new BusinessException("该车次已停运");
 
         Station fromStation = stationService.getStationById(train.getFromStationId());
         Station toStation = stationService.getStationById(train.getToStationId());
@@ -66,7 +72,7 @@ public class OrderController {
         if (dto.getPassengerIds() != null && !dto.getPassengerIds().isEmpty()) {
             Long passengerId = dto.getPassengerIds().get(0);
             Passenger passenger = passengerMapper.selectById(passengerId);
-            if (passenger == null) {
+            if (passenger == null || !userId.equals(passenger.getUserId())) {
                 throw new BusinessException("乘客信息不存在");
             }
             order.setPassengerId(passenger.getId());
@@ -92,10 +98,9 @@ public class OrderController {
             LocalTime departTime = LocalTime.parse(train.getDepartTime(), DateTimeFormatter.ofPattern("HH:mm:ss"));
             LocalTime arriveTime = LocalTime.parse(train.getArriveTime(), DateTimeFormatter.ofPattern("HH:mm:ss"));
             order.setDepartTime(LocalDateTime.of(today, departTime));
-            order.setArriveTime(LocalDateTime.of(today, arriveTime));
+            order.setArriveTime(LocalDateTime.of(arriveTime.isBefore(departTime) ? today.plusDays(1) : today, arriveTime));
         } catch (Exception e) {
-            order.setDepartTime(LocalDateTime.now());
-            order.setArriveTime(LocalDateTime.now().plusMinutes(train.getDuration() != null ? train.getDuration() : 60));
+            throw new BusinessException("日期或车次时间无效，请重新选择");
         }
 
         orderService.createOrder(order);
@@ -151,7 +156,7 @@ public class OrderController {
     public R<OrderVO> changeOrder(@PathVariable String orderNumber,
                                    @RequestBody BookDTO dto) {
         Order order = resolveOrder(orderNumber);
-        orderService.changeOrder(order.getOrderNumber(), dto.getTrainId(), dto.getSeatType());
+        orderService.changeOrder(order.getOrderNumber(), dto.getTrainId(), dto.getSeatType(), dto.getDate());
         Order updated = orderService.getOrderByNumber(order.getOrderNumber());
         return R.success(convertToVO(updated));
     }
@@ -177,6 +182,23 @@ public class OrderController {
                                         @RequestParam String toStation) {
         orderService.repairOrderStations(orderNumber, fromStation, toStation);
         return R.success();
+    }
+
+    @Autowired private com.ticket.booking.InventoryService inventory;
+    @PostMapping("/cancel/{number}") public R<Void> cancel(@PathVariable String number) {
+        orderService.cancelOrder(number,false); return R.success();
+    }
+    @GetMapping("/events/{number}") public R<Object> events(@PathVariable String number) {
+        orderService.getOrderByNumber(number); return R.success(inventory.events(number));
+    }
+
+    @Autowired private com.ticket.booking.ActionService actions;
+    @PostMapping("/prepare-refund/{number}") public R<?> prepareRefund(@PathVariable String number) {
+        return R.success(actions.refund(orderService.getOrderByNumber(number)));
+    }
+    @PostMapping("/prepare-change/{number}") public R<?> prepareChange(@PathVariable String number,@RequestBody BookDTO dto) {
+        Order order=orderService.getOrderByNumber(number);
+        return R.success(actions.change(order,trainService.getTrainById(dto.getTrainId()),dto.getSeatType(),dto.getDate()));
     }
 
     private Order resolveOrder(String orderNumberOrId) {

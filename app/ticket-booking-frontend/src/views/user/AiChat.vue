@@ -65,6 +65,15 @@
     </aside>
 
     <main class="chat-main">
+      <section v-if="actionCards.some(c => c.status === 'PENDING')" class="pending-actions" aria-label="待确认业务操作">
+        <strong>待确认操作 · 点击后才执行</strong>
+        <article v-for="card in actionCards.filter(c => c.status === 'PENDING')" :key="card.id">
+          <p>{{ card.summary }}</p><small>有效期至 {{ card.expiresAt?.replace('T', ' ') }}</small>
+          <div><el-button type="primary" size="small" :loading="actionBusy === card.id" :disabled="!!actionBusy" @click="resolveAction(card, true)">确认执行</el-button>
+          <el-button size="small" :disabled="!!actionBusy" @click="resolveAction(card, false)">取消</el-button></div>
+        </article>
+      </section>
+      <div v-if="isStreaming" class="stream-status" role="status">{{ streamStatus || '正在回复' }} <el-button text @click="stopStream">停止接收</el-button></div>
       <header class="chat-header">
         <div class="header-left">
           <el-button
@@ -96,10 +105,10 @@
               v-for="(suggestion, idx) in suggestions"
               :key="idx"
               class="suggestion-item"
-              @click="sendMessage(suggestion)"
+              @click="sendMessage(suggestion.prompt)"
             >
               <el-icon :size="16" color="#2563eb"><Promotion /></el-icon>
-              <span>{{ suggestion }}</span>
+              <span>{{ suggestion.label }}</span>
             </div>
           </div>
         </div>
@@ -132,10 +141,15 @@
                   <span></span><span></span><span></span>
                 </div>
                 <div
-                  v-show="!msg.streaming"
+                  v-show="msg.content"
                   class="markdown-content"
                   v-html="renderMarkdown(msg.content)"
                 />
+                <details v-for="source in (msg.sources || [])" :key="source.id" class="knowledge-source">
+                  <summary>{{ source.title }} · 知识来源</summary>
+                  <small>版本 {{ source.version?.slice(0, 8) }} · 索引日期 {{ source.indexedAt }}</small>
+                  <p>{{ source.text }}</p>
+                </details>
                 <div
                   v-if="!msg.streaming && msg.content"
                   class="message-actions"
@@ -182,9 +196,9 @@
             class="quick-tag"
             effect="plain"
             round
-            @click="sendMessage(q)"
+            @click="sendMessage(q.prompt)"
           >
-            {{ q }}
+            {{ q.label }}
           </el-tag>
         </div>
         <div class="input-area">
@@ -212,7 +226,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import {
   ChatDotRound,
   Plus,
@@ -231,18 +245,37 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MarkdownIt from 'markdown-it'
 import dayjs from 'dayjs'
-import { sendMessage as sendChatMessage } from '@/api/chat'
+import { streamMessage, getActions, confirmAction, cancelAction } from '@/api/chat'
+import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
 const md = new MarkdownIt({
-  html: true,
+  html: false,
   breaks: true,
   linkify: true,
-  highlight: true
+  typographer: false
 })
 
 const userStore = useUserStore()
+const route = useRoute()
 
+const actionCards = ref([])
+const actionBusy = ref('')
+const streamStatus = ref('')
+let streamAbort = null
+let actionTimer
+async function refreshActions() {
+  try { const res = await getActions(); actionCards.value = res.data || [] } catch {}
+}
+async function resolveAction(card, confirm) {
+  if (actionBusy.value) return
+  actionBusy.value = card.id
+  try {
+    const res = await (confirm ? confirmAction(card.id) : cancelAction(card.id))
+    ElMessage.success(confirm ? res.data : '操作已取消')
+  } finally { actionBusy.value = ''; await refreshActions() }
+}
+function stopStream() { streamAbort?.abort() }
 const sidebarCollapsed = ref(false)
 const searchKeyword = ref('')
 const inputText = ref('')
@@ -250,19 +283,21 @@ const isStreaming = ref(false)
 const totalTokens = ref(0)
 const messageContainerRef = ref(null)
 
+const travelGuideQuestions = [
+  { label: '购票须知', prompt: '请介绍购票须知，包括购票需要的证件、乘客信息和购票注意事项。' },
+  { label: '乘车常识', prompt: '请介绍乘车常识，包括进站检票、携带行李和乘车注意事项。' },
+  { label: '退改规则', prompt: '请介绍退票和改签规则，包括办理条件、时间限制、手续费和操作流程。' }
+]
+
 const suggestions = [
-  '北京到上海的高铁',
-  '退票规则是什么？',
-  '学生票怎么买？',
-  '如何改签车票？'
+  { label: '北京到上海的高铁', prompt: '北京到上海的高铁' },
+  ...travelGuideQuestions,
+  { label: '学生票怎么买？', prompt: '学生票怎么买？' }
 ]
 
 const quickQuestions = [
-  '北京到上海的高铁',
-  '退票规则',
-  '学生票购买',
-  '改签流程',
-  '丢失车票怎么办？'
+  ...suggestions,
+  { label: '丢失车票怎么办？', prompt: '丢失车票怎么办？' }
 ]
 
 const conversations = ref([])
@@ -380,49 +415,31 @@ const handleSend = () => {
 
 const callAIAgent = async (userText) => {
   isStreaming.value = true
-
-  const thinkingMessage = {
-    id: generateId(),
-    role: 'assistant',
-    content: '',
-    timestamp: Date.now(),
-    streaming: true
-  }
-  addMessage(thinkingMessage)
-
+  streamAbort = new AbortController()
+  const sessionId = currentConversationId.value
+  const id = generateId()
+  addMessage({ id, role: 'assistant', content: '', timestamp: Date.now(), streaming: true, sources: [] })
+  const conversation = conversations.value.find(c => c.id === sessionId)
+  const message = conversation.messages.find(m => m.id === id)
   try {
-    const sessionId = currentConversationId.value
-    const res = await sendChatMessage({
-      sessionId: sessionId,
-      message: userText
-    })
-
-    if (res && res.data) {
-      const replyContent = res.data.content || '抱歉，AI助手暂时无法回复。'
-      const conv = currentConversation.value
-      const lastMsg = conv.messages[conv.messages.length - 1]
-
-      // 模拟流式打字效果
-      for (let i = 0; i < replyContent.length; i++) {
-        lastMsg.content += replyContent[i]
-        totalTokens.value += 1
-        scrollToBottom()
-        await new Promise(resolve => setTimeout(resolve, 15))
-      }
-
-      lastMsg.streaming = false
-    }
+    await streamMessage({ sessionId, message: userText }, (event, payload) => {
+      if (event === 'delta') message.content += payload
+      if (event === 'progress') streamStatus.value = payload
+      if (event === 'sources') message.sources = [...new Map([...message.sources, ...payload].map(s => [s.id, s])).values()]
+      if (event === 'done') message.content = payload
+      scrollToBottom()
+    }, streamAbort.signal)
   } catch (error) {
-    console.error('AI调用失败:', error)
-    const conv = currentConversation.value
-    const lastMsg = conv.messages[conv.messages.length - 1]
-    lastMsg.content = '抱歉，AI助手暂时无法回复，请稍后再试。'
-    lastMsg.streaming = false
-    ElMessage.error('AI服务调用失败')
+    const note = error.name === 'AbortError' ? '已停止接收回复；已生成的确认卡片不会自动取消。' : error.message
+    message.content += `\n\n${note}`
+  } finally {
+    message.streaming = false
+    isStreaming.value = false
+    streamStatus.value = ''
+    streamAbort = null
+    saveToLocal()
+    await refreshActions()
   }
-
-  saveToLocal()
-  isStreaming.value = false
 }
 
 const copyMessage = async (content) => {
@@ -467,13 +484,13 @@ const saveToLocal = () => {
       currentId: currentConversationId.value,
       totalTokens: totalTokens.value
     }
-    localStorage.setItem('ai-chat-data', JSON.stringify(data))
+    localStorage.setItem(`ai-chat-data:${userStore.userInfo?.id}`, JSON.stringify(data))
   } catch {}
 }
 
 const loadFromLocal = () => {
   try {
-    const saved = localStorage.getItem('ai-chat-data')
+    const saved = localStorage.getItem(`ai-chat-data:${userStore.userInfo?.id}`)
     if (saved) {
       const data = JSON.parse(saved)
       conversations.value = data.conversations || []
@@ -492,11 +509,15 @@ watch(conversations, () => {
 }, { deep: true })
 
 onMounted(() => {
+  refreshActions()
+  actionTimer = setInterval(refreshActions, 30000)
+  inputText.value = typeof route.query.prompt === 'string' ? route.query.prompt : ''
   loadFromLocal()
   if (!currentConversationId.value) {
     createNewConversation()
   }
 })
+onUnmounted(() => { clearInterval(actionTimer); streamAbort?.abort() })
 </script>
 
 <style lang="scss" scoped>
@@ -1188,4 +1209,10 @@ onMounted(() => {
     display: none;
   }
 }
+.pending-actions { padding: 16px 24px; max-height: 240px; overflow: auto; background: #f5f8ff; border-bottom: 1px solid #dce5f2; }
+.pending-actions article { padding: 10px 0; border-bottom: 1px solid #dce5f2; }
+.pending-actions p { margin: 4px 0 8px; line-height: 1.6; }
+.pending-actions small { display: block; margin-bottom: 8px; color: #526078; }
+.stream-status { padding: 6px 24px; color: #526078; }
+.knowledge-source { margin-top: 12px; padding: 10px; border-top: 1px solid #dce5f2; font-size: 13px; line-height: 1.6; }
 </style>

@@ -27,6 +27,10 @@ public class KnowledgeIngestion {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeIngestion.class);
 
+    @org.springframework.beans.factory.annotation.Value("${ai.vector-store.type:milvus}") private String vectorStoreType;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate db;
+    @Autowired private com.ticket.booking.BookingSchema schema;
+
     private static final int MAX_SEGMENT_SIZE = 500;
     private static final int MAX_OVERLAP = 50;
 
@@ -44,8 +48,7 @@ public class KnowledgeIngestion {
             Resource[] resources = resolver.getResources("classpath:" + directory + "/*.txt");
 
             if (resources.length == 0) {
-                log.warn("classpath:{} 目录下未找到任何知识文件", directory);
-                return;
+                log.warn("classpath:{} 目录下未找到任何知识文件，将清理本导入器登记的旧片段", directory);
             }
 
             log.info("找到 {} 个知识文件", resources.length);
@@ -55,32 +58,39 @@ public class KnowledgeIngestion {
                 try {
                     String content = readResource(resource);
                     if (content != null && !content.isBlank()) {
-                        documents.add(Document.from(content));
+                        documents.add(Document.from(content, dev.langchain4j.data.document.Metadata.from(java.util.Map.of("source",resource.getFilename(), "version",java.util.UUID.nameUUIDFromBytes(content.getBytes(StandardCharsets.UTF_8)).toString(), "indexedAt",java.time.LocalDate.now().toString()))));
                         log.debug("已加载文件: {}", resource.getFilename());
                     }
                 } catch (Exception e) {
-                    log.warn("加载文件 {} 失败: {}", resource.getFilename(), e.getMessage());
+                    throw new IllegalStateException("无法读取知识文档："+resource.getFilename(),e);
                 }
             }
 
             if (documents.isEmpty()) {
                 log.warn("没有有效的知识内容");
-                return;
             }
 
             DocumentSplitter splitter = DocumentSplitters.recursive(MAX_SEGMENT_SIZE, MAX_OVERLAP);
-            EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
-                    .documentSplitter(splitter)
-                    .embeddingModel(embeddingModel)
-                    .embeddingStore(embeddingStore)
-                    .build();
-
-            ingestor.ingest(documents);
-
+            java.util.Set<String> current = new java.util.HashSet<>();
+            for(Document document:documents) {
+                int index=0;
+                for(TextSegment segment:splitter.split(document)) {
+                    String id=java.util.UUID.nameUUIDFromBytes((document.metadata().getString("source")+":"+(index++)+":"+document.metadata().getString("version")).getBytes(StandardCharsets.UTF_8)).toString();
+                    segment.metadata().put("citation", "S"+id.replace("-", ""));
+                    current.add(id);
+                    if("memory".equalsIgnoreCase(vectorStoreType) || db.queryForObject("SELECT COUNT(*) FROM ticket_knowledge_segment WHERE id=?",Integer.class,id)==0) {
+                        embeddingStore.addAll(java.util.List.of(id),java.util.List.of(embeddingModel.embed(segment).content()),java.util.List.of(segment));
+                        db.update("INSERT IGNORE INTO ticket_knowledge_segment(id) VALUES(?)",id);
+                    }
+                }
+            }
+            for(String old:db.queryForList("SELECT id FROM ticket_knowledge_segment",String.class)) {
+                if(!current.contains(old)) {embeddingStore.remove(old);db.update("DELETE FROM ticket_knowledge_segment WHERE id=?",old);}
+            }
 
             log.info("知识库导入完成，共导入 {} 个文档", documents.size());
         } catch (Exception e) {
-            log.error("知识导入失败", e);
+            throw new IllegalStateException("知识导入失败", e);
         }
     }
 

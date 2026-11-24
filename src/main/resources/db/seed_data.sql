@@ -123,3 +123,247 @@ INSERT IGNORE INTO `order` (`order_number`, `user_id`, `train_id`, `train_number
 ('TK20240615006', 1, 38, 'G2001', '西安北', '郑州东', '2026-08-25 06:50:00', '2026-08-25 08:50:00', 2, '06C', 1, '系统管理员', '110101199001011234', 229.00, 0, NULL, '2026-08-01 16:00:00'),
 ('TK20240615007', 1, 43, 'G1101', '武汉', '长沙南', '2026-05-12 07:15:00', '2026-05-12 08:45:00', 2, '04D', 1, '系统管理员', '110101199001011234', 110.00, 2, '2026-05-01 10:00:00', '2026-05-01 09:55:00'),
 ('TK20240615008', 1, 50, 'G67', '北京南', '广州', '2026-04-20 08:00:00', '2026-04-20 16:00:00', 0, '01A', 1, '系统管理员', '110101199001011234', 2580.00, 2, '2026-04-10 13:00:00', '2026-04-10 12:55:00');
+
+-- Additional demo routes (2026-11-19)
+-- 演示车次、时刻和价格仅用于本地测试，不代表真实铁路售票数据。
+-- 按站名匹配现有站点；车次号唯一，重复初始化不会覆盖已有车次或订单。
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9001', 0, s.id, d.id, '08:00:00', '12:40:00', 280, 12, 1659.00, 40, 884.80, 300, 553.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '上海虹桥' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '北京南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9001');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9002', 0, s.id, d.id, '14:00:00', '18:40:00', 280, 12, 1659.00, 40, 884.80, 300, 553.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '北京南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '上海虹桥' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9002');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9003', 0, s.id, d.id, '08:00:00', '16:30:00', 510, 12, 2586.00, 40, 1379.20, 300, 862.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '广州南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '北京西' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9003');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9004', 0, s.id, d.id, '14:00:00', '22:30:00', 510, 12, 2586.00, 40, 1379.20, 300, 862.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '北京西' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '广州南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9004');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9005', 0, s.id, d.id, '08:00:00', '08:36:00', 36, 12, 223.50, 40, 119.20, 300, 74.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '深圳北' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '广州南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9005');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9006', 0, s.id, d.id, '14:00:00', '14:36:00', 36, 12, 223.50, 40, 119.20, 300, 74.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '广州南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '深圳北' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9006');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9007', 0, s.id, d.id, '08:00:00', '09:00:00', 60, 12, 219.00, 40, 116.80, 300, 73.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '杭州东' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '上海虹桥' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9007');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9008', 0, s.id, d.id, '14:00:00', '15:00:00', 60, 12, 219.00, 40, 116.80, 300, 73.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '上海虹桥' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '杭州东' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9008');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9009', 0, s.id, d.id, '08:00:00', '09:30:00', 90, 12, 403.50, 40, 215.20, 300, 134.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '南京南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '上海虹桥' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9009');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9010', 0, s.id, d.id, '14:00:00', '15:30:00', 90, 12, 403.50, 40, 215.20, 300, 134.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '上海虹桥' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '南京南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9010');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9011', 0, s.id, d.id, '08:00:00', '09:30:00', 90, 12, 352.50, 40, 188.00, 300, 117.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '杭州东' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '南京南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9011');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9012', 0, s.id, d.id, '14:00:00', '15:30:00', 90, 12, 352.50, 40, 188.00, 300, 117.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '南京南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '杭州东' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9012');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9013', 0, s.id, d.id, '08:00:00', '09:50:00', 110, 12, 583.50, 40, 311.20, 300, 194.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '济南西' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '北京南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9013');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9014', 0, s.id, d.id, '14:00:00', '15:50:00', 110, 12, 583.50, 40, 311.20, 300, 194.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '北京南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '济南西' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9014');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9015', 0, s.id, d.id, '08:00:00', '11:30:00', 210, 12, 1195.50, 40, 637.60, 300, 398.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '上海虹桥' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '济南西' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9015');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9016', 0, s.id, d.id, '14:00:00', '17:30:00', 210, 12, 1195.50, 40, 637.60, 300, 398.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '济南西' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '上海虹桥' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9016');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9017', 0, s.id, d.id, '08:00:00', '11:00:00', 180, 12, 927.00, 40, 494.40, 300, 309.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '郑州东' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '北京西' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9017');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9018', 0, s.id, d.id, '14:00:00', '17:00:00', 180, 12, 927.00, 40, 494.40, 300, 309.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '北京西' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '郑州东' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9018');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9019', 0, s.id, d.id, '08:00:00', '10:00:00', 120, 12, 717.00, 40, 382.40, 300, 239.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '西安北' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '郑州东' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9019');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9020', 0, s.id, d.id, '14:00:00', '16:00:00', 120, 12, 717.00, 40, 382.40, 300, 239.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '郑州东' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '西安北' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9020');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9021', 0, s.id, d.id, '08:00:00', '10:00:00', 120, 12, 732.00, 40, 390.40, 300, 244.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '武汉' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '郑州东' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9021');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9022', 0, s.id, d.id, '14:00:00', '16:00:00', 120, 12, 732.00, 40, 390.40, 300, 244.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '郑州东' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '武汉' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9022');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9023', 0, s.id, d.id, '08:00:00', '09:30:00', 90, 12, 493.50, 40, 263.20, 300, 164.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '长沙南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '武汉' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9023');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9024', 0, s.id, d.id, '14:00:00', '15:30:00', 90, 12, 493.50, 40, 263.20, 300, 164.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '武汉' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '长沙南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9024');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9025', 0, s.id, d.id, '08:00:00', '10:40:00', 160, 12, 942.00, 40, 502.40, 300, 314.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '广州南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '长沙南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9025');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9026', 0, s.id, d.id, '14:00:00', '16:40:00', 160, 12, 942.00, 40, 502.40, 300, 314.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '长沙南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '广州南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9026');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9027', 0, s.id, d.id, '08:00:00', '12:30:00', 270, 12, 945.00, 40, 504.00, 300, 315.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '上海虹桥' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '武汉' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9027');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9028', 0, s.id, d.id, '14:00:00', '18:30:00', 270, 12, 945.00, 40, 504.00, 300, 315.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '武汉' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '上海虹桥' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9028');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9029', 0, s.id, d.id, '08:00:00', '09:40:00', 100, 12, 462.00, 40, 246.40, 300, 154.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '重庆西' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '成都东' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9029');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9030', 0, s.id, d.id, '14:00:00', '15:40:00', 100, 12, 462.00, 40, 246.40, 300, 154.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '成都东' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '重庆西' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9030');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9031', 0, s.id, d.id, '08:00:00', '11:50:00', 230, 12, 789.00, 40, 420.80, 300, 263.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '西安北' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '成都东' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9031');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9032', 0, s.id, d.id, '14:00:00', '17:50:00', 230, 12, 789.00, 40, 420.80, 300, 263.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '成都东' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '西安北' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9032');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9033', 0, s.id, d.id, '08:00:00', '10:10:00', 130, 12, 417.00, 40, 222.40, 300, 139.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '贵阳北' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '重庆西' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9033');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9034', 0, s.id, d.id, '14:00:00', '16:10:00', 130, 12, 417.00, 40, 222.40, 300, 139.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '重庆西' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '贵阳北' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9034');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9035', 0, s.id, d.id, '08:00:00', '12:20:00', 260, 12, 969.00, 40, 516.80, 300, 323.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '广州南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '贵阳北' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9035');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9036', 0, s.id, d.id, '14:00:00', '18:20:00', 260, 12, 969.00, 40, 516.80, 300, 323.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '贵阳北' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '广州南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9036');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9037', 0, s.id, d.id, '08:00:00', '10:00:00', 120, 12, 507.00, 40, 270.40, 300, 169.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '贵阳北' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '昆明南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9037');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9038', 0, s.id, d.id, '14:00:00', '16:00:00', 120, 12, 507.00, 40, 270.40, 300, 169.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '昆明南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '贵阳北' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9038');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9039', 0, s.id, d.id, '08:00:00', '09:00:00', 60, 12, 202.50, 40, 108.00, 300, 67.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '南京南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '合肥南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9039');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9040', 0, s.id, d.id, '14:00:00', '15:00:00', 60, 12, 202.50, 40, 108.00, 300, 67.50, '1234567', 1
+FROM station s JOIN station d ON d.name = '合肥南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '南京南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9040');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9041', 0, s.id, d.id, '08:00:00', '10:00:00', 120, 12, 534.00, 40, 284.80, 300, 178.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '杭州东' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '合肥南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9041');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9042', 0, s.id, d.id, '14:00:00', '16:00:00', 120, 12, 534.00, 40, 284.80, 300, 178.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '合肥南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '杭州东' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9042');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9043', 0, s.id, d.id, '08:00:00', '09:30:00', 90, 12, 471.00, 40, 251.20, 300, 157.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '长沙南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '南昌西' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9043');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9044', 0, s.id, d.id, '14:00:00', '15:30:00', 90, 12, 471.00, 40, 251.20, 300, 157.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '南昌西' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '长沙南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9044');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9045', 0, s.id, d.id, '08:00:00', '09:30:00', 90, 12, 255.00, 40, 136.00, 300, 85.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '厦门北' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '福州南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9045');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9046', 0, s.id, d.id, '14:00:00', '15:30:00', 90, 12, 255.00, 40, 136.00, 300, 85.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '福州南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '厦门北' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9046');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9047', 0, s.id, d.id, '08:00:00', '12:20:00', 260, 12, 855.00, 40, 456.00, 300, 285.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '杭州东' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '福州南' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9047');
+INSERT INTO `train` (`train_number`, `train_type`, `from_station_id`, `to_station_id`, `depart_time`, `arrive_time`, `duration`, `business_seats`, `business_price`, `first_seats`, `first_price`, `second_seats`, `second_price`, `running_days`, `status`)
+SELECT 'G9048', 0, s.id, d.id, '14:00:00', '18:20:00', 260, 12, 855.00, 40, 456.00, 300, 285.00, '1234567', 1
+FROM station s JOIN station d ON d.name = '福州南' AND d.deleted = 0 AND d.status = 1
+WHERE s.name = '杭州东' AND s.deleted = 0 AND s.status = 1
+AND NOT EXISTS (SELECT 1 FROM train WHERE train_number = 'G9048');

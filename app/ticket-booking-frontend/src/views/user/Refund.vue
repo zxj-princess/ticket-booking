@@ -188,7 +188,8 @@ import {
   Tickets, EditPen, Warning, Wallet, ArrowRight,
   Calendar, Clock, CircleClose, InfoFilled
 } from '@element-plus/icons-vue'
-import { getOrder, refundOrder } from '@/api/order'
+import { getOrder, prepareRefund } from '@/api/order'
+import { confirmAction, cancelAction } from '@/api/chat'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
@@ -212,12 +213,8 @@ const refundReasons = [
 ]
 
 const originalPrice = computed(() => Number(orderData.value.totalPrice || orderData.value.price) || 0)
-const insuranceFee = computed(() => Math.round(originalPrice.value * 0.02))
-const discount = computed(() => {
-  if (originalPrice.value > 500) return 20
-  if (originalPrice.value > 200) return 10
-  return 0
-})
+const insuranceFee = computed(() => 0)
+const discount = computed(() => 0)
 
 const feeRate = computed(() => {
   const now = new Date()
@@ -246,7 +243,7 @@ const refundAmount = computed(() => {
   return Math.max(0, originalPrice.value + insuranceFee.value - refundFee.value + discount.value)
 })
 const canRefund = computed(() => {
-  return refundForm.value.reason && (orderData.value.statusStr === 'PENDING' || orderData.value.statusStr === 'UNPAID')
+  return refundForm.value.reason && orderData.value.statusStr === 'PENDING'
 })
 const feeRateColor = computed(() => {
   if (feeRate.value <= 5) return '#16a34a'
@@ -276,25 +273,23 @@ async function fetchOrderDetail() {
 }
 
 async function confirmRefund() {
-  if (!canRefund.value) return
+  if (submitting.value) return
   submitting.value = true
+  let actionId
   try {
     const orderNo = orderData.value.orderNumber || orderData.value.orderNo || route.params.orderId
-    await ElMessageBox.confirm(
-      `确认退票 ${orderData.value.trainNo}，应退金额 ¥${refundAmount.value}？`,
-      '确认退票',
-      { type: 'warning', confirmButtonText: '确认退票', cancelButtonText: '再想想' }
-    )
-    await refundOrder(orderNo)
-    ElMessage.success('退票申请已提交，票款将原路退回')
+    const prepared = await prepareRefund(orderNo)
+    actionId = String(prepared.data).match(/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}/)?.[0]
+    if (!actionId) throw new Error('无法生成确认操作')
+    const summary = String(prepared.data).split('\n').slice(1).join('\n')
+    await ElMessageBox.confirm(summary, '确认操作 · 服务端实时报价', { type: 'warning', confirmButtonText: '确认执行', cancelButtonText: '取消' })
+    const result = await confirmAction(actionId)
+    ElMessage.success(result.data)
     router.push('/my-orders')
-  } catch (e) {
-    if (e !== 'cancel') {
-      ElMessage.error('退票失败，请重试')
-    }
-  } finally {
-    submitting.value = false
-  }
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') { if(actionId) await cancelAction(actionId) }
+    else ElMessage.error(error.message || '操作失败，请重新获取报价')
+  } finally { submitting.value = false }
 }
 
 onMounted(() => {
@@ -357,7 +352,7 @@ onMounted(() => {
 
 .refund-layout {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 24px;
 
   @media (max-width: 900px) {

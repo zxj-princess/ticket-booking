@@ -195,7 +195,7 @@ docker run -d --name milvus-standalone \
   milvusdb/milvus:latest
 ```
 
-> 如果不部署 Milvus，系统会自动降级为内存存储模式。
+> 如不部署 Milvus，请显式配置 `ai.vector-store.type=memory` 使用内存向量存储，仍需配置 Embedding 模型。
 
 ## 📖 API 接口文档
 
@@ -347,4 +347,13 @@ AI Agent 可调用以下工具函数完成业务操作：
 
 **简历亮点描述：**
 
-> 独立开发基于 AI Agent 的火车票智能客服管理系统，采用 SpringBoot + Vue3 前后端分离架构。核心亮点为集成 LangChain4j 实现 AI Agent 智能调度，支持自然语言对话交互、意图智能识别、业务接口自动调用等功能；基于 Milvus + RAG 实现铁路出行知识库智能问答。系统涵盖车次查询、在线订票、改签退订、后台管理等完整业务，具备高并发处理能力和良好的用户体验。
+> 独立开发基于 AI Agent 的火车票智能客服管理系统，采用 SpringBoot + Vue3 前后端分离架构。核心亮点为集成 LangChain4j 实现 AI Agent 智能调度，支持自然语言对话交互、意图智能识别、业务接口自动调用等功能；基于 Milvus + RAG 实现铁路出行知识库智能问答。系统涵盖车次查询、在线订票、改签退订、后台管理等完整业务，包含订单与库存一致性控制，性能指标以实际部署压测为准。
+
+
+## 本轮增强与验收
+
+详见 [增强实现与验证](IMPLEMENTATION.md)，包含数据库新增表、订单状态规则、AI 确认与 SSE 接口、知识引用及测试边界。
+
+## AI 环境变量
+
+启动后端前设置 `DASHSCOPE_API_KEY` 和 `DASHSCOPE_EMBEDDING_API_KEY`，分别用于聊天模型和向量模型。请勿将真实密钥写入仓库。

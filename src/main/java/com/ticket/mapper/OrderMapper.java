@@ -11,6 +11,9 @@ import java.util.Map;
 
 @Mapper
 public interface OrderMapper extends BaseMapper<Order> {
+    @Select("SELECT * FROM `order` WHERE order_number = #{number} AND deleted = 0 FOR UPDATE")
+    Order selectForUpdate(@Param("number") String number);
+
 
     @Select("SELECT * FROM `order` WHERE user_id = #{userId} AND deleted = 0 ORDER BY create_time DESC")
     List<Order> selectByUserId(@Param("userId") Long userId);

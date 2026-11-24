@@ -72,6 +72,15 @@ public class KnowledgeService {
         }
     }
 
+    public record Source(String id,String title,String version,String indexedAt,String text) {}
+    public List<Source> searchSources(String query) {
+        if(!initialized) initKnowledge();
+        if(!initialized) throw new IllegalStateException("知识库暂不可用");
+        return embeddingStore.findRelevant(embeddingModel.embed(query).content(),3,0.6).stream()
+            .filter(m -> m.embedded()!=null && m.embedded().metadata().getString("citation")!=null)
+            .map(m -> {var t=m.embedded();return new Source(t.metadata().getString("citation"),t.metadata().getString("source"),t.metadata().getString("version"),t.metadata().getString("indexedAt"),t.text());}).toList();
+    }
+
     public EmbeddingStore<TextSegment> getEmbeddingStore() {
         return embeddingStore;
     }

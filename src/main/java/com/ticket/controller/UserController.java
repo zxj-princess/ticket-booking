@@ -53,33 +53,14 @@ public class UserController {
         return R.success(vo);
     }
 
+    @Autowired
+    private com.ticket.config.SessionService sessions;
+
     @PostMapping("/logout")
     public R<Void> logout(HttpServletRequest request) {
-        // 从Authorization header中获取token并解析userId
         String token = request.getHeader("Authorization");
-        Long userId = null;
-        if (token != null && !token.isEmpty()) {
-            if (token.startsWith("Bearer ")) {
-                token = token.substring(7);
-            }
-            if (token.contains("_")) {
-                try {
-                    userId = Long.parseLong(token.split("_")[0]);
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        }
-
-        if (userId != null) {
-            // 退出登录时物理清空AI聊天记录和乘客信息
-            LambdaQueryWrapper<AiChatRecord> chatWrapper = new LambdaQueryWrapper<>();
-            chatWrapper.eq(AiChatRecord::getUserId, userId);
-            aiChatRecordMapper.delete(chatWrapper);
-
-            LambdaQueryWrapper<Passenger> passengerWrapper = new LambdaQueryWrapper<>();
-            passengerWrapper.eq(Passenger::getUserId, userId);
-            passengerMapper.delete(passengerWrapper);
-        }
+        if (token != null && token.startsWith("Bearer ")) token = token.substring(7);
+        sessions.revoke(token);
         return R.success();
     }
 
@@ -99,7 +80,15 @@ public class UserController {
     }
 
     @PutMapping("/update")
-    public R<UserVO> updateUser(@RequestBody User user) {
+    public R<UserVO> updateUser(@RequestBody User user, HttpServletRequest request) {
+        user.setId((Long) request.getAttribute("userId"));
+        user.setRole(null);
+        user.setStatus(null);
+        user.setBalance(null);
+        user.setDeleted(null);
+        user.setUsername(null);
+        user.setCreateTime(null);
+        user.setUpdateTime(null);
         userService.updateUser(user);
         User updated = userService.getUserById(user.getId());
         return R.success(convertToVO(updated));
@@ -141,6 +130,7 @@ public class UserController {
     @PostMapping("/passengers")
     public R<Passenger> addPassenger(@RequestBody Passenger passenger, HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
+        passenger.setId(null);
         passenger.setUserId(userId);
         passenger.setDeleted(0);
         passengerMapper.insert(passenger);

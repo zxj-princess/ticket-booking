@@ -76,25 +76,12 @@
             <a class="drop-item" href="#" @click.prevent="goTo('/my-orders')">车票退票</a>
           </div>
         </div>
-        <div class="nav-item has-dropdown">
-          出行指南
-          <el-icon class="caret"><ArrowDown /></el-icon>
-          <div class="nav-dropdown">
-            <a class="drop-item" href="#" @click.prevent>购票须知</a>
-            <a class="drop-item" href="#" @click.prevent>乘车常识</a>
-            <a class="drop-item" href="#" @click.prevent>退改规则</a>
-          </div>
-        </div>
       </div>
     </nav>
 
     <!-- ===== 内容区 ===== -->
     <main class="user-main">
-      <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
+      <router-view />
     </main>
 
     <!-- ===== 页脚 ===== -->
@@ -512,14 +499,14 @@ async function handleLogout() {
   }
 }
 
-/* ========== 过渡动画 ========== */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.25s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+/* Keep navigation and account controls usable on narrow screens. */
+@media (max-width: 760px) {
+  .top-bar .top-inner { flex-wrap: wrap; padding: 12px 16px; gap: 12px; }
+  .top-bar .search-wrapper { order: 3; flex-basis: 100%; max-width: none; }
+  .top-bar .top-right { margin-left: auto; }
+  .top-bar .top-right .top-link, .top-bar .top-right .divider { display: none; }
+  .main-nav .nav-inner { padding: 0 8px; flex-wrap: wrap; height: auto; min-height: 44px; }
+  .main-nav .nav-item { padding: 12px 10px; font-size: 14px; }
+  .user-footer .footer-brand { flex-wrap: wrap; }
 }
 </style>

@@ -35,34 +35,55 @@ public class OrderServiceImpl implements OrderService {
     @Autowired
     private UserMapper userMapper;
 
+    @Autowired
+    private com.ticket.booking.InventoryService inventory;
+
+    @Autowired
+    private com.ticket.mapper.PassengerMapper passengers;
+
     @Override
     @Transactional
     public void createOrder(Order order) {
+        if (order.getUserId() == null || !order.getUserId().equals(UserContext.getUserId()))
+            throw new BusinessException("订单用户不匹配");
+        if (order.getSeatType() == null || order.getSeatType() < 0 || order.getSeatType() > 5)
+            throw new BusinessException("请选择有效席别");
+        if (order.getDepartTime() == null || !order.getDepartTime().isAfter(LocalDateTime.now()))
+            throw new BusinessException("不能预订已发车的车次");
+        if (order.getTotalAmount() == null || order.getTotalAmount().signum() <= 0)
+            throw new BusinessException("票价无效");
+        Train train = trainMapper.selectById(order.getTrainId());
+        if (train == null || !Integer.valueOf(1).equals(train.getStatus())) throw new BusinessException("车次不可售");
+        var passenger = passengers.selectById(order.getPassengerId());
+        if (passenger == null || !order.getUserId().equals(passenger.getUserId())) throw new BusinessException("乘客不属于当前用户");
+        var date = order.getDepartTime().toLocalDate();
+        if (date.isAfter(java.time.LocalDate.now().plusDays(15)) || train.getRunningDays()==null || !train.getRunningDays().contains(String.valueOf(date.getDayOfWeek().getValue()))) throw new BusinessException("该日期车次未开售");
+        order.setTotalAmount(com.ticket.booking.InventoryService.price(train,order.getSeatType()));
+        inventory.reserve(train,date,order.getSeatType());
         order.setOrderNumber(generateOrderNumber());
         order.setStatus(0);
         order.setCreateTime(LocalDateTime.now());
         orderMapper.insert(order);
+        inventory.event(order.getOrderNumber(),"CREATED",order.getTotalAmount(),"锁座15分钟，等待模拟支付");
     }
 
     @Override
     @Transactional
     public void payOrder(String orderNumber) {
-        Order order = orderMapper.selectByOrderNumber(orderNumber);
+        Order order = orderMapper.selectForUpdate(orderNumber);
         if (order == null) {
             throw new BusinessException("订单不存在");
         }
+        requireOwner(order);
+        if (Integer.valueOf(1).equals(order.getStatus())) return;
         if (order.getStatus() == null || order.getStatus() != 0) {
             throw new BusinessException("订单状态异常，无法支付");
         }
-        if (order.getRemark() != null && order.getRemark().contains("已改签")) {
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("新价:(\\d+\\.\\d+)").matcher(order.getRemark());
-            if (m.find()) {
-                order.setTotalAmount(new BigDecimal(m.group(1)));
-            }
-        }
+        if (!order.getCreateTime().plusMinutes(15).isAfter(LocalDateTime.now())) throw new BusinessException("支付时间已过，请取消订单或等待自动关单");
         order.setStatus(1);
         order.setPayTime(LocalDateTime.now());
         orderMapper.updateById(order);
+        inventory.event(orderNumber,"PAID",order.getTotalAmount(),"模拟支付完成，不产生真实扣款");
     }
 
     @Override
@@ -71,6 +92,7 @@ public class OrderServiceImpl implements OrderService {
         if (order == null) {
             throw new BusinessException("订单不存在");
         }
+        requireOwner(order);
         return order;
     }
 
@@ -80,6 +102,7 @@ public class OrderServiceImpl implements OrderService {
         if (order == null) {
             throw new BusinessException("订单不存在");
         }
+        requireOwner(order);
         return order;
     }
 
@@ -107,27 +130,25 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public void autoCompletePastOrders() {
-        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Order::getStatus, 1)
-               .isNotNull(Order::getDepartTime)
-               .lt(Order::getDepartTime, java.time.LocalDateTime.now());
-        List<Order> expiredOrders = orderMapper.selectList(wrapper);
-        for (Order order : expiredOrders) {
-            order.setStatus(2);
-            order.setUpdateTime(java.time.LocalDateTime.now());
-            orderMapper.updateById(order);
-        }
+        orderMapper.update(null, new LambdaUpdateWrapper<Order>()
+                .eq(Order::getStatus, 1)
+                .isNotNull(Order::getArriveTime)
+                .lt(Order::getArriveTime, LocalDateTime.now())
+                .set(Order::getStatus, 2)
+                .set(Order::getUpdateTime, LocalDateTime.now()));
     }
 
     @Override
     @Transactional
     public void refundOrder(String orderNumber) {
-        Order order = orderMapper.selectByOrderNumber(orderNumber);
+        Order order = orderMapper.selectForUpdate(orderNumber);
         if (order == null) {
             throw new BusinessException("订单不存在");
         }
 
         // 1. 状态校验
+        requireOwner(order);
+        if (Integer.valueOf(3).equals(order.getStatus())) return;
         if (order.getStatus() != 1 && order.getStatus() != 2) {
             throw new BusinessException("当前订单状态不支持退票，只有待出行或已完成的订单才能退票");
         }
@@ -146,6 +167,8 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal refundFee = calculateRefundFee(order);
         BigDecimal refundAmount = order.getTotalAmount().subtract(refundFee);
 
+        inventory.release(trainMapper.selectById(order.getTrainId()),order.getDepartTime().toLocalDate(),order.getSeatType());
+        inventory.event(orderNumber,"REFUNDED",refundAmount,"模拟退款，手续费："+refundFee);
         order.setStatus(3); // 已退票
         order.setRefundTime(java.time.LocalDateTime.now());
         order.setRefundAmount(refundAmount);
@@ -236,10 +259,11 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public void changeOrder(String orderNumber, Long newTrainId, Integer seatType, String dateStr) {
-        Order order = orderMapper.selectByOrderNumber(orderNumber);
+        Order order = orderMapper.selectForUpdate(orderNumber);
         if (order == null) {
             throw new BusinessException("订单不存在");
         }
+        requireOwner(order);
         if (order.getStatus() == null || order.getStatus() != 1) {
             throw new BusinessException("当前订单状态不支持改签，只有待出行的订单才能改签");
         }
@@ -260,7 +284,7 @@ public class OrderServiceImpl implements OrderService {
         int finalSeatType = seatType != null ? seatType : (order.getSeatType() != null ? order.getSeatType() : 2);
 
         BigDecimal oldPrice = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-        BigDecimal newPrice = getSeatPrice(newTrain, finalSeatType);
+        BigDecimal newPrice = com.ticket.booking.InventoryService.price(newTrain, finalSeatType);
         BigDecimal diff = newPrice.subtract(oldPrice);
 
         java.time.LocalDate targetDate = null;
@@ -275,33 +299,24 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal fee = calculateChangeFeeV2(order, oldPrice, newPrice, targetDate);
         BigDecimal finalAmount = diff.add(fee);
 
-        order.setTrainId(newTrain.getId());
-        order.setTrainNumber(newTrain.getTrainNumber());
-        order.setSeatType(finalSeatType);
-        order.setRemark("已改签,原价:" + oldPrice + ",新价:" + newPrice + ",改签费:" + fee + ",差额:" + diff);
-
-        try {
-            java.time.LocalTime departTime = java.time.LocalTime.parse(newTrain.getDepartTime(), java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-            java.time.LocalTime arriveTime = java.time.LocalTime.parse(newTrain.getArriveTime(), java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-            order.setDepartTime(java.time.LocalDateTime.of(targetDate, departTime));
-            order.setArriveTime(java.time.LocalDateTime.of(targetDate, arriveTime));
-        } catch (Exception e) {
-            order.setDepartTime(order.getDepartTime());
-            order.setArriveTime(order.getArriveTime());
-        }
-
-        int cmp = finalAmount.compareTo(BigDecimal.ZERO);
-        if (cmp > 0) {
-            order.setTotalAmount(finalAmount);
-            order.setStatus(0);
-        } else if (cmp < 0) {
-            order.setTotalAmount(newPrice);
-            order.setStatus(1);
-            refundToWallet(order.getUserId(), finalAmount.abs());
-        } else {
-            order.setTotalAmount(newPrice);
-            order.setStatus(1);
-        }
+        if (newTrain.getStatus()!=1 || !order.getDepartTime().isAfter(LocalDateTime.now())) throw new BusinessException("已发车或目标车次不可售");
+        Train oldTrain=trainMapper.selectById(order.getTrainId());
+        if (!java.util.Objects.equals(oldTrain.getFromStationId(),newTrain.getFromStationId()) || !java.util.Objects.equals(oldTrain.getToStationId(),newTrain.getToStationId())) throw new BusinessException("只能改签同线路车次");
+        var departure=java.time.LocalDateTime.of(targetDate,java.time.LocalTime.parse(newTrain.getDepartTime()));
+        if (!departure.isAfter(LocalDateTime.now()) || targetDate.isAfter(java.time.LocalDate.now().plusDays(15)) || (newTrain.getRunningDays()==null || !newTrain.getRunningDays().contains(String.valueOf(targetDate.getDayOfWeek().getValue())))) throw new BusinessException("目标日期未开售或已发车");
+        if (oldTrain.getId().equals(newTrainId) && order.getDepartTime().toLocalDate().equals(targetDate) && order.getSeatType().equals(finalSeatType)) throw new BusinessException("请选择不同的车次、日期或席别");
+        inventory.lockTrain(Math.min(oldTrain.getId(),newTrainId));
+        inventory.lockTrain(Math.max(oldTrain.getId(),newTrainId));
+        inventory.release(oldTrain,order.getDepartTime().toLocalDate(),order.getSeatType());
+        inventory.reserve(newTrain,targetDate,finalSeatType);
+        order.setTrainId(newTrainId); order.setTrainNumber(newTrain.getTrainNumber()); order.setSeatType(finalSeatType);
+        order.setDepartTime(departure);
+        var arrival=java.time.LocalDateTime.of(targetDate,java.time.LocalTime.parse(newTrain.getArriveTime()));
+        order.setArriveTime(arrival.isBefore(departure)?arrival.plusDays(1):arrival);
+        order.setTotalAmount(newPrice); order.setStatus(1);
+        order.setRemark("已改签；模拟结算差额："+finalAmount+"；手续费："+fee);
+        if(finalAmount.signum()<0) refundToWallet(order.getUserId(),finalAmount.abs());
+        inventory.event(orderNumber,"CHANGED",finalAmount,"模拟结算；原票价："+oldPrice+"；新票价："+newPrice+"；手续费："+fee);
 
         orderMapper.updateById(order);
     }
@@ -338,11 +353,9 @@ public class OrderServiceImpl implements OrderService {
 
     private void refundToWallet(Long userId, BigDecimal amount) {
         if (userId == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) return;
-        User user = userMapper.selectById(userId);
-        if (user == null) return;
-        BigDecimal currentBalance = user.getBalance() != null ? user.getBalance() : BigDecimal.ZERO;
-        user.setBalance(currentBalance.add(amount));
-        userMapper.updateById(user);
+        userMapper.update(null, new LambdaUpdateWrapper<User>()
+                .eq(User::getId, userId)
+                .setSql("balance = COALESCE(balance, 0) + {0}", amount));
     }
 
     private BigDecimal getSeatPrice(Train train, Integer seatType) {
@@ -365,67 +378,17 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public void repairOrderAfterChange(String orderNumber, Long trainId, Integer seatType, String dateStr) {
-        Order order = orderMapper.selectByOrderNumber(orderNumber);
-        if (order == null) {
-            throw new BusinessException("订单不存在");
-        }
-        Train train = trainMapper.selectById(trainId);
-        if (train == null) {
-            throw new BusinessException("车次不存在");
-        }
-
-        int finalSeatType = seatType != null ? seatType : (order.getSeatType() != null ? order.getSeatType() : 2);
-
-        BigDecimal oldPrice = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-        BigDecimal newPrice = getSeatPrice(train, finalSeatType);
-        BigDecimal diff = newPrice.subtract(oldPrice);
-
-        order.setTrainId(train.getId());
-        order.setTrainNumber(train.getTrainNumber());
-        order.setSeatType(finalSeatType);
-        order.setRemark("已改签,原价:" + oldPrice + ",新价:" + newPrice);
-
-        java.time.LocalDate travelDate;
-        if (dateStr != null && !dateStr.isEmpty()) {
-            travelDate = java.time.LocalDate.parse(dateStr, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        } else if (order.getDepartTime() != null) {
-            travelDate = order.getDepartTime().toLocalDate();
-        } else {
-            travelDate = java.time.LocalDate.now();
-        }
-
-        try {
-            java.time.LocalTime departTime = java.time.LocalTime.parse(train.getDepartTime(), java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-            java.time.LocalTime arriveTime = java.time.LocalTime.parse(train.getArriveTime(), java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-            order.setDepartTime(java.time.LocalDateTime.of(travelDate, departTime));
-            order.setArriveTime(java.time.LocalDateTime.of(travelDate, arriveTime));
-        } catch (Exception e) {
-            // keep original if parsing fails
-        }
-
-        int cmp = diff.compareTo(BigDecimal.ZERO);
-        if (cmp > 0) {
-            order.setTotalAmount(diff);
-            order.setStatus(0);
-        } else if (cmp < 0) {
-            order.setTotalAmount(newPrice);
-            order.setStatus(1);
-            refundToWallet(order.getUserId(), diff.abs());
-        } else {
-            order.setTotalAmount(oldPrice);
-            order.setStatus(1);
-        }
-
-        orderMapper.updateById(order);
+        throw new BusinessException("修复入口已停用，请使用正式改签接口");
     }
 
     @Override
     @Transactional
     public void repairOrderStations(String orderNumber, String fromStation, String toStation) {
-        Order order = orderMapper.selectByOrderNumber(orderNumber);
+        Order order = orderMapper.selectForUpdate(orderNumber);
         if (order == null) {
             throw new BusinessException("订单不存在");
         }
+        requireOwner(order);
         order.setFromStation(fromStation);
         order.setToStation(toStation);
         orderMapper.updateById(order);
@@ -434,6 +397,41 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public Map<String, Object> getOrderStats() {
         return orderMapper.selectOrderStats(null);
+    }
+
+    @Override
+    @Transactional
+    public void cancelOrder(String number, boolean expiredOnly) {
+        Order order=orderMapper.selectForUpdate(number);
+        if(order==null) throw new BusinessException("订单不存在");
+        if(!expiredOnly) requireOwner(order);
+        if(!Integer.valueOf(0).equals(order.getStatus())) return;
+        if(expiredOnly && order.getCreateTime().plusMinutes(15).isAfter(LocalDateTime.now())) return;
+        inventory.release(trainMapper.selectById(order.getTrainId()),order.getDepartTime().toLocalDate(),order.getSeatType());
+        order.setStatus(5); order.setCancelTime(LocalDateTime.now()); orderMapper.updateById(order);
+        inventory.event(number,"CANCELLED",BigDecimal.ZERO,expiredOnly?"支付超时，库存已释放":"用户取消，库存已释放");
+    }
+
+    @Override public BigDecimal quoteRefund(String number) {
+        Order order=getOrderByNumber(number);
+        if(order.getStatus()!=1 || !order.getDepartTime().isAfter(LocalDateTime.now())) throw new BusinessException("当前订单不可退票");
+        return order.getTotalAmount().subtract(calculateRefundFee(order));
+    }
+    @Override public BigDecimal quoteChange(String number,Long trainId,Integer seat,String date) {
+        Order order=getOrderByNumber(number); Train train=trainMapper.selectById(trainId);
+        if(train==null || order.getStatus()!=1) throw new BusinessException("当前订单不可改签");
+        BigDecimal price=com.ticket.booking.InventoryService.price(train,seat);
+        return price.subtract(order.getTotalAmount()).add(calculateChangeFeeV2(order,order.getTotalAmount(),price,java.time.LocalDate.parse(date)));
+    }
+
+    private void requireOwner(Order order) {
+        Long current = UserContext.getUserId();
+        if (current == null) throw new BusinessException("请先登录");
+        if (current.equals(order.getUserId())) return;
+        User user = userMapper.selectById(current);
+        if (user == null || !Integer.valueOf(1).equals(user.getRole())) {
+            throw new BusinessException("无权操作该订单");
+        }
     }
 
     private String generateOrderNumber() {

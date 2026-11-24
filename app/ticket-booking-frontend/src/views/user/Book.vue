@@ -1,10 +1,11 @@
 <template>
-  <div class="book-page">
+  <div class="book-page page-container">
     <div class="page-header">
       <h2>预订车票</h2>
       <p class="header-desc">请确认车次信息并选择乘客</p>
     </div>
 
+    <el-steps :active="payDialogVisible ? 1 : 0" simple class="booking-steps"><el-step title="选择乘客" /><el-step title="核对订单" /><el-step title="订单页模拟支付" /></el-steps>
     <div class="book-layout">
       <div class="book-main">
         <div class="card train-detail" v-loading="loading">
@@ -45,6 +46,7 @@
           <div class="card-title">
             <el-icon><User /></el-icon>
             <span>选择乘客</span>
+            <el-button class="add-passenger-btn" type="primary" plain @click="openPassengerDialog">新增乘客</el-button>
           </div>
           <el-form :model="bookingForm" :rules="passengerRules" ref="bookingFormRef" class="passenger-form">
             <el-form-item prop="passengerId">
@@ -77,31 +79,19 @@
                   <span class="info-value">{{ selectedPassenger.phone }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">性别</span>
-                  <span class="info-value">{{ selectedPassenger.gender === 'M' ? '男' : '女' }}</span>
+                  <span class="info-label">乘客类型</span>
+                  <span class="info-value">{{ ['成人', '学生', '儿童', '军人'][selectedPassenger.type] || '成人' }}</span>
                 </div>
               </div>
             </div>
-            <div class="no-passenger" v-else>
-              <el-empty description="暂无乘客信息，请先到个人中心添加" :image-size="60" />
+            <div class="no-passenger" v-else-if="!passengerList.length">
+              <el-empty description="还没有乘客，添加后即可继续预订" :image-size="60">
+                <el-button type="primary" @click="openPassengerDialog">新增乘客</el-button>
+              </el-empty>
             </div>
           </el-form>
         </div>
 
-        <div class="card contact-section">
-          <div class="card-title">
-            <el-icon><Message /></el-icon>
-            <span>联系方式</span>
-          </div>
-          <el-form :model="bookingForm" label-width="80px">
-            <el-form-item label="手机号">
-              <el-input v-model="bookingForm.phone" placeholder="请输入手机号" />
-            </el-form-item>
-            <el-form-item label="备注">
-              <el-input v-model="bookingForm.remark" type="textarea" :rows="2" placeholder="选填，备注信息" />
-            </el-form-item>
-          </el-form>
-        </div>
       </div>
 
       <div class="book-sidebar">
@@ -146,46 +136,45 @@
       </div>
     </div>
 
-    <el-dialog v-model="payDialogVisible" title="模拟支付" width="400px" :close-on-click-modal="false">
+    <el-dialog v-model="passengerDialogVisible" title="新增乘客" width="480px" :close-on-click-modal="false" :close-on-press-escape="!savingPassenger" :show-close="!savingPassenger">
+      <p class="passenger-dialog-hint">保存到常用乘客，并自动选中用于本次预订。</p>
+      <el-form ref="newPassengerFormRef" :model="newPassenger" :rules="newPassengerRules" label-position="top" :disabled="savingPassenger" @submit.prevent="savePassenger">
+        <el-form-item label="乘客姓名" prop="name"><el-input v-model.trim="newPassenger.name" maxlength="50" placeholder="请填写与证件一致的姓名" /></el-form-item>
+        <el-form-item label="身份证号" prop="idCard"><el-input v-model.trim="newPassenger.idCard" maxlength="18" placeholder="请输入18位身份证号" /></el-form-item>
+        <el-form-item label="手机号" prop="phone"><el-input v-model.trim="newPassenger.phone" maxlength="11" placeholder="请输入11位手机号" /></el-form-item>
+        <el-form-item label="乘客类型" prop="type"><el-select v-model="newPassenger.type" style="width: 100%"><el-option label="成人" :value="0" /><el-option label="学生" :value="1" /><el-option label="儿童" :value="2" /><el-option label="军人" :value="3" /></el-select></el-form-item>
+      </el-form>
+      <template #footer><el-button :disabled="savingPassenger" @click="passengerDialogVisible = false">取消</el-button><el-button type="primary" :loading="savingPassenger" @click="savePassenger">保存并选择</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="payDialogVisible" title="确认订单" width="400px" :close-on-click-modal="false">
       <div class="pay-dialog-content">
         <div class="pay-amount">
-          <span class="pay-label">支付金额</span>
+          <span class="pay-label">订单金额</span>
           <span class="pay-price">¥{{ totalPrice }}</span>
         </div>
-        <div class="pay-methods">
-          <div
-            v-for="method in payMethods"
-            :key="method.value"
-            class="pay-method"
-            :class="{ active: payMethod === method.value }"
-            @click="payMethod = method.value"
-          >
-            <el-icon :size="20"><component :is="method.icon" /></el-icon>
-            <span>{{ method.label }}</span>
-            <el-icon v-if="payMethod === method.value" class="check-icon"><Check /></el-icon>
-          </div>
-        </div>
+        <el-alert title="演示系统：创建订单后请前往订单页进行模拟支付，不会实际扣款" type="info" :closable="false" />
+
       </div>
       <template #footer>
         <el-button @click="cancelPay">取消</el-button>
-        <el-button type="primary" :loading="paying" @click="confirmPay">确认支付</el-button>
+        <el-button type="primary" :loading="paying" @click="confirmPay">确认创建订单</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
-import { Tickets, ArrowRight, User, Message, Wallet, Check } from '@element-plus/icons-vue'
+import { Tickets, ArrowRight, User, Wallet, Check } from '@element-plus/icons-vue'
 import { getTrainById } from '@/api/train'
 import { createOrder } from '@/api/order'
+import { getMyPassengers, addPassenger } from '@/api/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()
-const userStore = useUserStore()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -197,23 +186,58 @@ const paying = ref(false)
 const payMethod = ref('wechat')
 
 const bookingForm = ref({
-  passengerId: '',
-  phone: '',
-  remark: ''
+  passengerId: ''
 })
+
+const passengerDialogVisible = ref(false)
+const savingPassenger = ref(false)
+const newPassengerFormRef = ref(null)
+const newPassenger = ref({ name: '', idCard: '', phone: '', type: 0 })
+const newPassengerRules = {
+  name: [{ required: true, whitespace: true, message: '请输入乘客姓名', trigger: 'blur' }],
+  idCard: [{ required: true, message: '请输入身份证号', trigger: 'blur' }, { pattern: /^\d{17}[\dXx]$/, message: '请输入18位身份证号', trigger: 'blur' }],
+  phone: [{ required: true, message: '请输入手机号', trigger: 'blur' }, { pattern: /^1[3-9]\d{9}$/, message: '请输入有效的11位手机号', trigger: 'blur' }]
+}
+async function openPassengerDialog() {
+  newPassenger.value = { name: '', idCard: '', phone: '', type: 0 }
+  passengerDialogVisible.value = true
+  await nextTick()
+  newPassengerFormRef.value?.clearValidate()
+}
+async function savePassenger() {
+  if (savingPassenger.value) return
+  const valid = await newPassengerFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  const payload = { ...newPassenger.value, idCard: newPassenger.value.idCard.toUpperCase() }
+  const existing = passengerList.value.find(p => p.idCard?.toUpperCase() === payload.idCard)
+  if (existing) {
+    bookingForm.value.passengerId = existing.id
+    passengerDialogVisible.value = false
+    ElMessage.info('该乘客已存在，已为您选中')
+    return
+  }
+  savingPassenger.value = true
+  try {
+    const res = await addPassenger(payload)
+    if (!res.data?.id) throw new Error('乘客保存结果异常')
+    passengerList.value.push(res.data)
+    bookingForm.value.passengerId = res.data.id
+    passengerDialogVisible.value = false
+    bookingFormRef.value?.clearValidate('passengerId')
+    ElMessage.success('乘客已保存并选中')
+  } catch {
+    ElMessage.error('乘客保存失败，请重试')
+  } finally {
+    savingPassenger.value = false
+  }
+}
 
 const selectedSeatLabel = computed(() => route.query.seatLabel || '二等座')
-const selectedSeatPrice = computed(() => Number(route.query.seatPrice) || 0)
+const selectedSeatPrice = computed(() => Number(trainData.value[['businessPrice', 'firstPrice', 'secondPrice', 'softPrice', 'hardPrice', 'seatPrice'][mapSeatType(route.query.seatType)]]) || 0)
 
-const insuranceFee = computed(() => Math.round(selectedSeatPrice.value * 0.02))
-const discount = computed(() => {
-  if (selectedSeatPrice.value > 500) return 20
-  if (selectedSeatPrice.value > 200) return 10
-  return 0
-})
-const totalPrice = computed(() => {
-  return Math.max(0, selectedSeatPrice.value + insuranceFee.value - discount.value)
-})
+const insuranceFee = computed(() => 0)
+const discount = computed(() => 0)
+const totalPrice = computed(() => selectedSeatPrice.value)
 
 const selectedPassenger = computed(() => {
   if (!bookingForm.value.passengerId) return null
@@ -221,7 +245,7 @@ const selectedPassenger = computed(() => {
 })
 
 const canSubmit = computed(() => {
-  return bookingForm.value.passengerId && bookingForm.value.phone && totalPrice.value > 0
+  return !!selectedPassenger.value && totalPrice.value > 0
 })
 
 const passengerRules = {
@@ -236,12 +260,6 @@ const payMethods = [
 
 async function fetchTrainDetail() {
   const trainId = route.params.trainId
-  if (route.query.trainData) {
-    try {
-      trainData.value = JSON.parse(route.query.trainData)
-      return
-    } catch {}
-  }
   loading.value = true
   try {
     const res = await getTrainById(trainId)
@@ -253,21 +271,13 @@ async function fetchTrainDetail() {
   }
 }
 
-function fetchPassengers() {
-  const userInfo = userStore.userInfo
-  if (userInfo?.passengers && Array.isArray(userInfo.passengers)) {
-    passengerList.value = userInfo.passengers
-  } else {
-    passengerList.value = [
-      { id: 1, name: userInfo?.nickname || userInfo?.username || '张三', idCard: '110101199001011234', phone: userInfo?.phone || '13800138000', gender: 'M' },
-      { id: 2, name: '李四', idCard: '110101199203054321', phone: '13900139000', gender: 'F' }
-    ]
-  }
-  if (passengerList.value.length > 0 && !bookingForm.value.passengerId) {
-    bookingForm.value.passengerId = passengerList.value[0].id
-  }
-  if (!bookingForm.value.phone && userInfo?.phone) {
-    bookingForm.value.phone = userInfo.phone
+async function fetchPassengers() {
+  try {
+    const res = await getMyPassengers()
+    passengerList.value = res.data || []
+    if (passengerList.value.length) bookingForm.value.passengerId = passengerList.value[0].id
+  } catch {
+    ElMessage.error('乘客信息加载失败，请刷新重试')
   }
 }
 
@@ -292,12 +302,13 @@ function cancelPay() {
 }
 
 function mapSeatType(seatType) {
-  if (typeof seatType === 'number') return seatType
+  if (seatType !== undefined && /^[0-5]$/.test(String(seatType))) return Number(seatType)
   const map = { 'BUSINESS': 0, 'FIRST_CLASS': 1, 'SECOND_CLASS': 2, 'SOFT_SLEEPER': 3, 'HARD_SLEEPER': 4, 'HARD_SEAT': 5 }
   return map[seatType] ?? 2
 }
 
 async function confirmPay() {
+  if (paying.value) return
   paying.value = true
   try {
     const orderData = {
@@ -309,10 +320,10 @@ async function confirmPay() {
     }
     await createOrder(orderData)
     payDialogVisible.value = false
-    ElMessage.success('支付成功！')
+    ElMessage.success('订单已创建，请在我的订单中完成模拟支付')
     router.push('/my-orders')
   } catch {
-    ElMessage.error('支付失败，请重试')
+    ElMessage.error('创建订单失败，请重试')
   } finally {
     paying.value = false
   }
@@ -334,11 +345,7 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .book-page {
-  .page-container {
-    padding: var(--space-lg);
-    max-width: 1200px;
-    margin: 0 auto;
-  }
+
 
   .card {
     background: var(--bg-card);
@@ -391,7 +398,7 @@ onMounted(() => {
 
 .book-layout {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 24px;
 
   @media (max-width: 900px) {
@@ -482,19 +489,20 @@ onMounted(() => {
     align-items: center;
     gap: 12px;
     padding: 14px 18px;
-    background: var(--gradient-button);
+    background: #eff6ff;
+    border: 1px solid #dbeafe;
     border-radius: var(--radius-sm);
-    color: #fff;
-    box-shadow: var(--shadow-button);
+    color: #183555;
+    box-shadow: none;
 
     .detail-label {
-      color: rgba(255, 255, 255, 0.92);
+      color: #475569;
     }
 
     :deep(.el-tag) {
-      background: rgba(255, 255, 255, 0.2) !important;
-      border: 1px solid rgba(255, 255, 255, 0.4) !important;
-      color: #fff !important;
+      background: #fff !important;
+      border: 1px solid #bfdbfe !important;
+      color: #1d4ed8 !important;
     }
 
     .seat-price {
@@ -550,12 +558,6 @@ onMounted(() => {
 }
 
 .passenger-form {
-  :deep(.el-form-item) {
-    margin-bottom: 12px;
-  }
-}
-
-.contact-section {
   :deep(.el-form-item) {
     margin-bottom: 12px;
   }
@@ -718,4 +720,10 @@ onMounted(() => {
     }
   }
 }
+.booking-steps { margin-bottom: 24px; border: 1px solid var(--border-light); border-radius: 12px; background: #fff; padding: 20px; }
+.add-passenger-btn { margin-left: auto; }
+.passenger-dialog-hint { color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px; }
+.book-main, .book-sidebar { min-width: 0; }
+@media (max-width: 600px) { .booking-steps { padding: 14px 8px; } .booking-steps :deep(.el-step__title) { font-size: 12px; } .book-page .card { padding: 18px; } }
+@media (max-width: 768px) { .book-layout { display: block !important; } .book-sidebar { width: 100% !important; margin-top: 16px; } }
 </style>

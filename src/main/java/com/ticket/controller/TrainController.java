@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/train")
 public class TrainController {
+    @Autowired private com.ticket.booking.InventoryService inventory;
 
     @Autowired
     private TrainService trainService;
@@ -69,9 +70,14 @@ public class TrainController {
         for (Station s : toStations) stationMap.put(s.getId(), s);
 
         List<TrainVO> voList = trains.stream()
-                .map(t -> convertToVO(t, stationMap))
+                .map(t -> availability(t, convertToVO(t, stationMap), java.time.LocalDate.parse(date)))
                 .collect(Collectors.toList());
         return R.success(voList);
+    }
+
+    private TrainVO availability(Train t,TrainVO vo,java.time.LocalDate date) {
+        vo.setBusinessSeats(inventory.available(t,date,0));vo.setFirstSeats(inventory.available(t,date,1));vo.setSecondSeats(inventory.available(t,date,2));
+        vo.setSoftSleepers(inventory.available(t,date,3));vo.setHardSleepers(inventory.available(t,date,4));vo.setHardSeats(inventory.available(t,date,5));return vo;
     }
 
     @GetMapping("/{id}")

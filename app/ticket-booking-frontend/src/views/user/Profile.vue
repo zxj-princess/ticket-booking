@@ -421,7 +421,7 @@ onMounted(async () => {
 
 .profile-layout {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 24px;
 
   @media (max-width: 900px) {

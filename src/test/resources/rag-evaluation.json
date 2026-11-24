@@ -1,0 +1,8 @@
+[
+ {"question":"学生票需要什么条件？","expectedSource":"student-ticket.txt"},
+ {"question":"儿童票的购买规则是什么？","expectedSource":"child-ticket.txt"},
+ {"question":"提前三天退票怎么收费？","expectedSource":"refund-rules.txt"},
+ {"question":"火车票改签有哪些限制？","expectedSource":"change-rules.txt"},
+ {"question":"如何购买火车票？","expectedSource":"ticket-rules.txt"},
+ {"question":"推荐一只明天涨停的股票","expectedBehavior":"说明超出铁路知识范围，不编造引用"}
+]

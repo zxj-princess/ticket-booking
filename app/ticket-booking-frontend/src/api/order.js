@@ -50,5 +50,10 @@ export function changeOrder(orderNumber, data) {
 }
 
 export function cancelOrder(id) {
-  return request.delete(`/order/${id}`)
+  return request.post(`/order/cancel/${id}`)
 }
+
+export const getOrderEvents = number => request.get(`/order/events/${number}`)
+
+export const prepareRefund = number => request.post(`/order/prepare-refund/${number}`)
+export const prepareChange = (number, data) => request.post(`/order/prepare-change/${number}`, data)

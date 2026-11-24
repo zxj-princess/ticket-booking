@@ -48,17 +48,17 @@ mybatis-plus:
 ai:
   # 大模型API配置
   chat-model:
-    provider: dashscope  # dashscope | openai
-    api-key: sk-ws-H.EIIXLIR.OQr1.MEUCIHmLESI85xKHGwGBxBWRO-Ytds8rzUGpk9SL2hPslr4AAiEAgVKlfi_o9oiI_yNQzheArldCWxiiLwVrRsRYwf_B1as
+    provider: dashscope  # dashscope
+    api-key: ${DASHSCOPE_API_KEY:}
     model-name: qwen-max
     base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
   
   # 向量模型配置
   embedding-model:
     provider: dashscope
-    api-key: sk-ws-H.EIIXLIR.OQr1.MEUCIHmLESI85xKHGwGBxBWRO-Ytds8rzUGpk9SL2hPslr4AAiEAgVKlfi_o9oiI_yNQzheArldCWxiiLwVrRsRYwf_B1as
-    model-name: text-embedding-v2
-    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api-key: ${DASHSCOPE_EMBEDDING_API_KEY:}
+    model-name: qwen4-max
+    base-url: https://ws-i2su1u96qy1c1y8k.cn-beijing.maas.aliyuncs.com/api/v1
   
   # 向量数据库配置(Milvus)
   vector-store:

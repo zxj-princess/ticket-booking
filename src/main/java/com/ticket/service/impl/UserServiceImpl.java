@@ -39,6 +39,11 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private PassengerMapper passengerMapper;
 
+    @Autowired
+    private com.ticket.config.SessionService sessions;
+
+    private final org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder passwords = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
+
     @Override
     public User register(User user) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
@@ -47,15 +52,10 @@ public class UserServiceImpl implements UserService {
         if (count > 0) {
             throw new BusinessException("用户名已存在");
         }
-        user.setPassword(md5Encrypt(user.getPassword()));
+        user.setPassword(passwords.encode(user.getPassword()));
         user.setStatus(1);
         user.setRole(0);
         userMapper.insert(user);
-
-        // 注册新账号时清空所有订单（逻辑删除）
-        LambdaUpdateWrapper<Order> clearWrapper = new LambdaUpdateWrapper<>();
-        clearWrapper.set(Order::getDeleted, 1);
-        orderMapper.update(null, clearWrapper);
 
         return user;
     }
@@ -68,29 +68,19 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             throw new BusinessException("用户不存在");
         }
-        String encryptedPwd = md5Encrypt(password);
-        if (!encryptedPwd.equals(user.getPassword())) {
+        boolean legacy = user.getPassword().matches("[a-fA-F0-9]{32}");
+        boolean valid = legacy ? md5Encrypt(password).equalsIgnoreCase(user.getPassword()) : passwords.matches(password, user.getPassword());
+        if (!valid) {
             throw new BusinessException("密码错误");
         }
         if (user.getStatus() != 1) {
             throw new BusinessException("账号已被禁用");
         }
 
-        // 每次登录物理清空当前用户的AI聊天记录和乘客信息
-        Long userId = user.getId();
-
-        // 物理删除AI聊天记录（确保彻底清空）
-        AiChatRecord chatExample = new AiChatRecord();
-        chatExample.setUserId(userId);
-        aiChatRecordMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AiChatRecord>()
-                .eq(AiChatRecord::getUserId, userId));
-
-        // 物理删除乘客信息（确保彻底清空）
-        Passenger passengerExample = new Passenger();
-        passengerExample.setUserId(userId);
-        passengerMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Passenger>()
-                .eq(Passenger::getUserId, userId));
-
+        if (legacy) {
+            user.setPassword(passwords.encode(password));
+            userMapper.updateById(user);
+        }
         return generateToken(user);
     }
 
@@ -117,7 +107,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("用户不存在");
         }
         if (StringUtils.hasText(user.getPassword())) {
-            user.setPassword(md5Encrypt(user.getPassword()));
+            user.setPassword(passwords.encode(user.getPassword()));
         } else {
             user.setPassword(null);
         }
@@ -171,7 +161,6 @@ public class UserServiceImpl implements UserService {
     }
 
     private String generateToken(User user) {
-        String raw = user.getId() + "_" + user.getUsername() + "_" + System.currentTimeMillis();
-        return user.getId() + "_" + md5Encrypt(raw);
+        return sessions.create(user.getId());
     }
 }

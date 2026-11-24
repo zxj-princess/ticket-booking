@@ -458,3 +458,36 @@ input {
   color: var(--primary-blue-deep) !important;
   font-weight: 600;
 }
+
+/* Unified product surfaces */
+:root { --radius-md: 10px; --radius-lg: 14px; --shadow-card: none; --gradient-button: #2563eb; --gradient-nav: #183555; --gradient-card-header: #eef3fa; --text-muted: #64748b; }
+.el-button { font-weight: 500; }
+.el-button:focus-visible, a:focus-visible { outline: 3px solid #93b4f3; outline-offset: 3px; }
+.page-header-card { border-radius: 14px; }
+@media(max-width:768px) { .tabs-row { overflow-x: auto; } .footer-actions { flex-wrap:wrap; gap:8px; } .page-container { padding-left:12px; padding-right:12px; } }
+
+/* Shared spacing and readable headings across booking and account pages. */
+.user-main > .page-container,
+.user-main > .search-page,
+.user-main > .my-orders-page {
+  width: 100%; max-width: 1200px; margin: 0 auto; padding: 32px 24px 48px;
+}
+.user-main .page-container > .page-header {
+  padding: 24px 28px; margin-bottom: 24px; background: #fff;
+  border: 1px solid var(--border-light); border-radius: 14px;
+}
+.user-main .page-container > .page-header h2 { color: #183555; font-size: 26px; line-height: 1.4; margin-bottom: 8px; }
+.user-main .page-container > .page-header .header-desc { color: #64748b; font-size: 14px; line-height: 1.6; }
+.user-main .page-container .card { border-radius: 14px; }
+.user-main .page-container .card-title { color: #183555; border-bottom-width: 1px; }
+.user-main .page-container .selected-seat { background: #eff6ff; color: #183555; box-shadow: none; border: 1px solid #dbeafe; }
+.user-main .page-container .selected-seat .detail-label { color: #475569; }
+.user-main .page-container .selected-seat .seat-price { color: #1d4ed8; font-variant-numeric: tabular-nums; }
+.el-dialog { max-width: calc(100vw - 32px); }
+.admin-main .filter-bar { flex-wrap: wrap; row-gap: 12px; }
+@media (max-width: 640px) {
+  .user-main > .page-container, .user-main > .search-page, .user-main > .my-orders-page { padding: 20px 14px 32px; }
+  .user-main .page-container > .page-header { padding: 20px; }
+  .user-main .page-container > .page-header h2 { font-size: 22px; }
+  .user-main .page-container .card { padding: 18px; }
+}

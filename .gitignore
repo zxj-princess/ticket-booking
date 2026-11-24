@@ -48,3 +48,9 @@ app/**/dist/
 app/**/dist-ssr/
 app/**/.env.local
 app/**/.env.*.local
+
+# Local package download cache
+app/**/.npm-cache/
+
+# Local agent memory
+.workbuddy/

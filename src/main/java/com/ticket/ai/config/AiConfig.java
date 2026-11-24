@@ -61,9 +61,19 @@ public class AiConfig {
     @Value("${ai.vector-store.milvus.dimension:1536}")
     private int milvusDimension;
 
+    @Value("${ai.vector-store.type:milvus}")
+    private String vectorStoreType;
+
     /**
      * 配置聊天大模型（增加超时和重试配置，避免Connection reset）
      */
+    @Bean
+    public dev.langchain4j.model.chat.StreamingChatLanguageModel streamingChatModel() {
+        return dev.langchain4j.model.openai.OpenAiStreamingChatModel.builder()
+            .baseUrl(chatBaseUrl).apiKey(chatApiKey).modelName(chatModelName)
+            .timeout(java.time.Duration.ofSeconds(90)).temperature(0.3).build();
+    }
+
     @Bean
     public ChatLanguageModel chatLanguageModel() {
         log.info("初始化聊天模型: {}", chatModelName);
@@ -97,6 +107,7 @@ public class AiConfig {
      */
     @Bean
     public EmbeddingStore<TextSegment> embeddingStore() {
+        if ("memory".equalsIgnoreCase(vectorStoreType)) return new dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore<>();
         log.info("初始化Milvus向量存储: {}:{} / collection={} / dimension={}", milvusHost, milvusPort, milvusCollectionName, milvusDimension);
         return MilvusEmbeddingStore.builder()
                 .host(milvusHost)

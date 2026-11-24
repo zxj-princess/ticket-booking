@@ -188,8 +188,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Tickets, Search, Money, Warning, ArrowRight } from '@element-plus/icons-vue'
-import { getOrder, changeOrder } from '@/api/order'
+import { getOrder, prepareChange } from '@/api/order'
 import { searchTrains } from '@/api/train'
+import { confirmAction, cancelAction } from '@/api/chat'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
@@ -276,39 +277,23 @@ function selectTrain(train) {
 }
 
 async function confirmChange() {
-  if (!canChange.value) return
+  if (submitting.value) return
   submitting.value = true
+  let actionId
   try {
     const orderNo = orderData.value.orderNumber || orderData.value.orderNo || route.params.orderId
-    const opt = seatOptions.find(o => o.value === selectedSeatType.value)
-    let confirmMsg = `确认改签 ${orderData.value.trainNo} → ${selectedTrain.value.trainNo}（${opt?.label || '二等座'}）？`
-    if (finalAmount.value > 0) {
-      confirmMsg = `确认改签 ${orderData.value.trainNo} → ${selectedTrain.value.trainNo}（${opt?.label || '二等座'}），需支付 ¥${finalAmount.value}（差价+手续费）？\n温馨提示：车票仅支持一次改签，确认后无法再次更改。`
-    } else if (finalAmount.value < 0) {
-      confirmMsg = `确认改签 ${orderData.value.trainNo} → ${selectedTrain.value.trainNo}（${opt?.label || '二等座'}），差额 ¥${Math.abs(finalAmount.value)} 将退回您的钱包？\n温馨提示：车票仅支持一次改签，确认后无法再次更改。`
-    } else {
-      confirmMsg = `确认改签 ${orderData.value.trainNo} → ${selectedTrain.value.trainNo}（${opt?.label || '二等座'}）？\n温馨提示：车票仅支持一次改签，确认后无法再次更改。`
-    }
-    await ElMessageBox.confirm(confirmMsg, '确认改签', { type: 'warning' })
-    await changeOrder(orderNo, {
-      trainId: selectedTrain.value.id,
-      seatType: selectedSeatType.value
-    })
-    if (finalAmount.value > 0) {
-      ElMessage.success('改签成功！请前往「我的订单」完成支付')
-    } else if (finalAmount.value < 0) {
-      ElMessage.success(`改签成功！差额 ¥${Math.abs(finalAmount.value)} 已退回您的钱包`)
-    } else {
-      ElMessage.success('改签成功！')
-    }
+    const prepared = await prepareChange(orderNo, { trainId: selectedTrain.value.id, seatType: selectedSeatType.value, date: searchForm.value.date })
+    actionId = String(prepared.data).match(/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}/)?.[0]
+    if (!actionId) throw new Error('无法生成确认操作')
+    const summary = String(prepared.data).split('\n').slice(1).join('\n')
+    await ElMessageBox.confirm(summary, '确认操作 · 服务端实时报价', { type: 'warning', confirmButtonText: '确认执行', cancelButtonText: '取消' })
+    const result = await confirmAction(actionId)
+    ElMessage.success(result.data)
     router.push('/my-orders')
-  } catch (e) {
-    if (e !== 'cancel') {
-      ElMessage.error(e?.response?.data?.msg || '改签失败，请重试')
-    }
-  } finally {
-    submitting.value = false
-  }
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') { if(actionId) await cancelAction(actionId) }
+    else ElMessage.error(error.message || '操作失败，请重新获取报价')
+  } finally { submitting.value = false }
 }
 
 onMounted(() => {
@@ -371,7 +356,7 @@ onMounted(() => {
 
 .change-layout {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 24px;
 
   @media (max-width: 900px) {

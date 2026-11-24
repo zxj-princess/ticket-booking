@@ -125,6 +125,8 @@ public class AiChatServiceImpl implements AiChatService {
 
     @Override
     public AiChatRecord chat(Long userId, String sessionId, String message) {
+        if (sessionId == null || sessionId.isBlank() || sessionId.length() > 100 || message == null || message.isBlank() || message.length() > 10000)
+            throw new BusinessException("会话或消息参数无效");
         UserContext.setUserId(userId);
 
         AiChatRecord userRecord = new AiChatRecord();
@@ -165,7 +167,7 @@ public class AiChatServiceImpl implements AiChatService {
                     // 设置当前对话的用户ID到工具类，解决LangChain4j异步调用ThreadLocal丢失问题
                     ticketBookingTools.setCurrentUserId(userId);
 
-                    int memoryId = Math.abs((sessionId + userId).hashCode());
+                    String memoryId = userId + ":" + sessionId;
                     log.info("调用AI Agent(知识问答), sessionId={}, memoryId={}, userId={}", sessionId, memoryId, userId);
                     reply = ticketBookingAgent.chat(memoryId, message);
                     log.info("AI Agent回复: {}", reply);
@@ -831,7 +833,10 @@ public class AiChatServiceImpl implements AiChatService {
 
     @Override
     public List<AiChatRecord> listBySessionId(String sessionId) {
-        return aiChatRecordMapper.selectBySessionId(sessionId);
+        return aiChatRecordMapper.selectList(new LambdaQueryWrapper<AiChatRecord>()
+                .eq(AiChatRecord::getSessionId, sessionId)
+                .eq(AiChatRecord::getUserId, UserContext.getUserId())
+                .orderByAsc(AiChatRecord::getCreateTime));
     }
 
     @Override
@@ -848,6 +853,8 @@ public class AiChatServiceImpl implements AiChatService {
         if (record == null) {
             throw new BusinessException("对话记录不存在");
         }
+        if (!java.util.Objects.equals(record.getUserId(), UserContext.getUserId()))
+            throw new BusinessException("无权操作该记录");
         aiChatRecordMapper.deleteById(id);
     }
 

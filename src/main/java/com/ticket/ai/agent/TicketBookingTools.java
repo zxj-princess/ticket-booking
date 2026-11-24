@@ -36,22 +36,19 @@ public class TicketBookingTools {
     /**
      * 当前AI对话的用户ID（解决LangChain4j异步调用导致ThreadLocal丢失的问题）
      */
-    private Long currentUserId;
+
 
     /**
      * 设置当前AI对话的用户ID，在Agent调用前设置，调用后清除
      */
     public void setCurrentUserId(Long userId) {
-        this.currentUserId = userId;
+        // Identity comes from the authenticated request context only.
     }
 
     /**
      * 获取当前AI对话的用户ID，优先使用保存的ID，回退到UserContext
      */
     private Long getCurrentUserId() {
-        if (currentUserId != null) {
-            return currentUserId;
-        }
         return UserContext.getUserId();
     }
 
@@ -69,6 +66,8 @@ public class TicketBookingTools {
 
     @Autowired
     private OrderService orderService;
+    @Autowired private com.ticket.booking.ActionService actions;
+    @Autowired private com.ticket.booking.InventoryService inventory;
 
     @Autowired
     private OrderMapper orderMapper;
@@ -107,6 +106,8 @@ public class TicketBookingTools {
                 result.append("该日期没有查询到从「").append(fromCity).append("」到「").append(toCity).append("」的车次。");
             } else {
                 for (Train t : trains) {
+                    t.setBusinessSeats(inventory.available(t,localDate,0)); t.setFirstSeats(inventory.available(t,localDate,1)); t.setSecondSeats(inventory.available(t,localDate,2));
+                    t.setSoftSleepers(inventory.available(t,localDate,3)); t.setHardSleepers(inventory.available(t,localDate,4)); t.setHardSeats(inventory.available(t,localDate,5));
                     result.append(formatTrainInfo(t)).append("\n");
                 }
             }
@@ -711,7 +712,7 @@ public class TicketBookingTools {
             if (train == null) return "未找到对应车次「" + trainId + "」，请确认车次信息是否正确。";
 
             Long userId = getCurrentUserId();
-            log.info("bookTicket userId={}, currentUserId={}", userId, currentUserId);
+            log.info("bookTicket userId={}, currentUserId={}", userId, UserContext.getUserId());
             if (userId == null) return "请先登录后再订票。";
 
             List<Passenger> passengers = passengerMapper.selectList(
@@ -733,13 +734,11 @@ public class TicketBookingTools {
                     .findFirst()
                     .orElse(null);
                 if (selectedPassenger == null) {
-                    // 指定的乘客找不到，自动使用第一个乘客
-                    selectedPassenger = passengers.get(0);
-                    actualPassengerName = selectedPassenger.getName();
-                    log.info("指定乘客[{}]不存在，自动使用第一个乘客[{}]", passengerName, actualPassengerName);
+                    return "指定乘客不存在，请先添加或重新选择乘客。";
                 }
             } else {
-                // 未指定乘客，直接使用第一个乘客
+                if(passengers.size()>1) return "有多位常用乘客，请明确乘客姓名后再预订";
+                // A unique passenger is still shown on the confirmation card.
                 selectedPassenger = passengers.get(0);
                 actualPassengerName = selectedPassenger.getName();
                 log.info("未指定乘客，自动使用第一个乘客[{}]", actualPassengerName);
@@ -766,50 +765,15 @@ public class TicketBookingTools {
             BigDecimal seatPrice = getPriceBySeatType(train, finalSeatType);
             order.setTotalAmount(seatPrice);
 
-            try {
-                java.time.LocalDate today = java.time.LocalDate.now();
-                java.time.LocalDate targetDate = today;
+            if(date==null || date.isBlank()) return "请先明确出发日期（yyyy-MM-dd）";
+            java.time.LocalDate targetDate=java.time.LocalDate.parse(date);
+            java.time.LocalTime departTime=java.time.LocalTime.parse(train.getDepartTime());
+            java.time.LocalTime arriveTime=java.time.LocalTime.parse(train.getArriveTime());
+            order.setDepartTime(java.time.LocalDateTime.of(targetDate,departTime));
+            order.setArriveTime(java.time.LocalDateTime.of(arriveTime.isBefore(departTime)?targetDate.plusDays(1):targetDate,arriveTime));
+            if(!order.getDepartTime().isAfter(java.time.LocalDateTime.now())) return "请选择尚未发车的日期和车次";
 
-                if (date != null && !date.isEmpty()) {
-                    try {
-                        targetDate = java.time.LocalDate.parse(date, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-                        // 如果日期年份明显不对（比如用了2023年，但现在是2026年），自动修正为当前年份
-                        if (targetDate.getYear() < today.getYear()) {
-                            targetDate = targetDate.withYear(today.getYear());
-                            log.info("日期年份已修正为: {}", targetDate);
-                        }
-                    } catch (Exception e) {
-                        targetDate = today;
-                    }
-                }
-
-                java.time.LocalTime departTime = java.time.LocalTime.parse(train.getDepartTime(), java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-                java.time.LocalTime arriveTime = java.time.LocalTime.parse(train.getArriveTime(), java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
-                order.setDepartTime(java.time.LocalDateTime.of(targetDate, departTime));
-                order.setArriveTime(java.time.LocalDateTime.of(targetDate, arriveTime));
-                log.info("订单发车时间: {}", order.getDepartTime());
-            } catch (Exception e) {
-                order.setDepartTime(java.time.LocalDateTime.now());
-                order.setArriveTime(java.time.LocalDateTime.now().plusMinutes(train.getDuration() != null ? train.getDuration() : 60));
-                log.warn("日期设置异常，使用当前时间: {}", e.getMessage());
-            }
-
-            orderService.createOrder(order);
-
-            StringBuilder result = new StringBuilder();
-            result.append("订票成功！\n\n");
-            result.append("订单号：").append(order.getOrderNumber()).append("\n");
-            result.append("车次：").append(train.getTrainNumber()).append("\n");
-            result.append("路线：").append(fromStation != null ? fromStation.getName() : "").append(" → ").append(toStation != null ? toStation.getName() : "").append("\n");
-            result.append("发车：").append(order.getDepartTime() != null ? order.getDepartTime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) : train.getDepartTime()).append("\n");
-            result.append("到达：").append(order.getArriveTime() != null ? order.getArriveTime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) : train.getArriveTime()).append("\n");
-            result.append("座位：").append(seatTypeLabel(finalSeatType)).append("\n");
-            result.append("票价：¥").append(seatPrice).append("\n");
-            result.append("乘客：").append(selectedPassenger.getName()).append("\n");
-            result.append("状态：待支付\n");
-
-            result.append("\n请前往「我的订单」完成支付以确保座位。");
-            return result.toString();
+            return actions.book(order);
         } catch (Exception e) {
             return "订票失败：" + e.getMessage() + "。请检查车次和乘客信息是否正确。";
         }
@@ -819,7 +783,7 @@ public class TicketBookingTools {
     public String listMyPassengers() {
         try {
             Long userId = getCurrentUserId();
-            log.info("listMyPassengers: userId={}, currentUserId={}", userId, currentUserId);
+            log.info("listMyPassengers: userId={}, currentUserId={}", userId, UserContext.getUserId());
             if (userId == null) return "请先登录后再查询乘客信息。";
 
             List<Passenger> passengers = passengerMapper.selectList(
@@ -876,42 +840,10 @@ public class TicketBookingTools {
     @Tool("办理退票。参数orderNumber可选(订单号或订单ID)，如果不传则自动获取当前用户的唯一活跃订单。返回退票办理结果、退款金额等信息。")
     public String processRefund(String orderNumber) {
         try {
-            Order order = resolveOrderForOperation(orderNumber, "退票");
-            if (order == null) return "未找到可退票的订单。";
-
-            if (order.getStatus() != null && order.getStatus() != 1 && order.getStatus() != 2) {
-                return "当前订单状态不支持退票。订单状态：" + orderStatusText(order.getStatus());
-            }
-
-            // 列车已发车拦截
-            if (order.getDepartTime() != null && java.time.LocalDateTime.now().isAfter(order.getDepartTime())) {
-                return "列车已于" + order.getDepartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) + "发车，不允许退票。";
-            }
-
-            // 开车后改签的车票禁止退票
-            if (order.getRemark() != null && order.getRemark().contains("开车后改签")) {
-                return "开车后改签生成的车票不支持退票。";
-            }
-
-            // 计算退票费（与后端一致）
-            BigDecimal refundFee = calculateRefundFeeForOrder(order);
-            BigDecimal originalAmount = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-            BigDecimal refundAmount = originalAmount.subtract(refundFee);
-
-            orderService.refundOrder(order.getOrderNumber());
-
-            StringBuilder result = new StringBuilder();
-            result.append("退票办理成功！\n\n");
-            result.append("订单号：").append(order.getOrderNumber() != null ? order.getOrderNumber() : order.getId()).append("\n");
-            result.append("车次：").append(order.getTrainNumber()).append("\n");
-            result.append("原票价：¥").append(originalAmount).append("\n");
-            result.append("退票手续费：¥").append(refundFee).append("\n");
-            result.append("应退金额：¥").append(refundAmount).append("\n");
-            result.append("\n票款将原路返回至支付账户，一般3-7个工作日到账。");
-            return result.toString();
-        } catch (Exception e) {
-            return "退票失败：" + e.getMessage();
-        }
+            Order order=resolveOrderForOperation(orderNumber,"退票");
+            if(order==null) return "未找到订单";
+            return actions.refund(order);
+        } catch(Exception e) { return "无法准备操作："+e.getMessage(); }
     }
 
     /**
@@ -958,77 +890,11 @@ public class TicketBookingTools {
     @Tool("办理改签。参数orderNumber可选(订单号或订单ID，不传则自动获取当前用户唯一活跃订单)，newTrainId为新车次ID或车次号(如15或G1601)，seatType可选(新座位类型)，date可选(新日期yyyy-MM-dd)。返回改签办理结果。")
     public String processChange(String orderNumber, String newTrainId, Integer seatType, String date) {
         try {
-            if (newTrainId == null || newTrainId.isEmpty()) return "请提供要改签的新车次ID或车次号。";
-
-            Order order = resolveOrderForOperation(orderNumber, "改签");
-            if (order == null) return "未找到可改签的订单。";
-
-            if (order.getStatus() != null && order.getStatus() != 1) {
-                return "当前订单状态不支持改签。";
-            }
-            if (order.getRemark() != null && order.getRemark().contains("已改签")) {
-                return "该订单已经改签过一次，每张车票仅可改签一次，无法再次改签。";
-            }
-
-            Train newTrain = resolveTrain(newTrainId);
-            if (newTrain == null) return "未找到对应新车次「" + newTrainId + "」，请重新选择车次。";
-
-            int finalSeatType = seatType != null ? seatType : (order.getSeatType() != null ? order.getSeatType() : 2);
-            BigDecimal oldPrice = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-            BigDecimal newPrice = getPriceBySeatType(newTrain, finalSeatType);
-            BigDecimal diff = newPrice.subtract(oldPrice);
-
-            LocalDate targetDateForFee = null;
-            if (date != null && !date.isEmpty()) {
-                targetDateForFee = LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-            } else if (order.getDepartTime() != null) {
-                targetDateForFee = order.getDepartTime().toLocalDate();
-            }
-            BigDecimal fee = calculateChangeFee(order, oldPrice, newPrice, targetDateForFee);
-            BigDecimal finalAmount = diff.add(fee);
-
-            try {
-                orderService.changeOrder(order.getOrderNumber(), newTrain.getId(), finalSeatType, date);
-            } catch (Exception ex) {
-                String msg = ex.getMessage();
-                if (msg != null && (msg.contains("已改签") || msg.contains("不支持改签"))) {
-                    return msg;
-                }
-                return "改签办理失败（可能余票被抢或系统繁忙），请重新选择车次。原因：" + (msg != null ? msg : "未知");
-            }
-
-            StringBuilder result = new StringBuilder();
-            result.append("✅ 改签办理成功！\n\n");
-            result.append("订单号：").append(order.getOrderNumber()).append("\n");
-            result.append("原车次：").append(order.getTrainNumber()).append(" → 新车次：").append(newTrain.getTrainNumber()).append("\n");
-            if (date != null && !date.isEmpty()) {
-                result.append("新乘车日期：").append(date).append("\n");
-            }
-            result.append("新发车时间：").append(newTrain.getDepartTime()).append("\n");
-            result.append("新到达时间：").append(newTrain.getArriveTime()).append("\n");
-            result.append("席位：").append(seatTypeLabel(finalSeatType)).append("\n\n");
-
-            int cmp = finalAmount.compareTo(BigDecimal.ZERO);
-            result.append("【费用结算】\n");
-            result.append("原票价：¥").append(oldPrice).append(" | 新票价：¥").append(newPrice).append("\n");
-            result.append("差价：").append(diff.compareTo(BigDecimal.ZERO) >= 0 ? "+" : "").append("¥").append(diff);
-            result.append(" | 手续费：¥").append(fee).append("\n");
-            if (cmp > 0) {
-                result.append("需支付：¥").append(finalAmount).append("\n");
-                result.append("\n请前往「我的订单」完成支付，支付后改签正式生效。");
-            } else if (cmp < 0) {
-                result.append("已退还：¥").append(finalAmount.abs()).append("（已退回钱包）\n");
-                result.append("\n改签已完成，请按新车次时间乘车。可在「我的订单」查看。");
-            } else {
-                result.append("无需补退。\n");
-                result.append("\n改签已完成，请按新车次时间乘车。可在「我的订单」查看。");
-            }
-            result.append("\n\n⚠️ 温馨提示：本车票已改签，无法再次改签。");
-
-            return result.toString();
-        } catch (Exception e) {
-            return "改签失败：" + e.getMessage();
-        }
+            Order order=resolveOrderForOperation(orderNumber,"改签");
+            Train train=resolveTrain(newTrainId);
+            if(order==null || train==null) return "未找到订单或目标车次";
+            return actions.change(order,train,seatType==null?order.getSeatType():seatType,date==null?order.getDepartTime().toLocalDate().toString():date);
+        } catch(Exception e) { return "无法准备操作："+e.getMessage(); }
     }
 
     @Tool("获取出行中转推荐方案。参数fromCity为出发城市，toCity为到达城市，date为出发日期。当没有直达列车时，推荐中转方案。返回直达和中转车次信息。")

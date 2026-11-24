@@ -20,6 +20,7 @@ public class TrainServiceImpl implements TrainService {
 
     @Autowired
     private TrainMapper trainMapper;
+    @Autowired private com.ticket.mapper.OrderMapper orders;
 
     @Override
     public List<Train> queryTrains(Long fromStationId, Long toStationId, String date) {
@@ -72,6 +73,7 @@ public class TrainServiceImpl implements TrainService {
         if (train == null) {
             throw new BusinessException("车次不存在");
         }
+        if(orders.selectCount(new LambdaQueryWrapper<com.ticket.entity.Order>().eq(com.ticket.entity.Order::getTrainId,id).in(com.ticket.entity.Order::getStatus,0,1))>0) throw new BusinessException("该车次存在待支付或待出行订单，不能删除");
         trainMapper.deleteById(id);
     }
 

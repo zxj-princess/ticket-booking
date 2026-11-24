@@ -9,6 +9,11 @@ public interface OrderService {
 
     void createOrder(Order order);
 
+    java.math.BigDecimal quoteRefund(String number);
+    java.math.BigDecimal quoteChange(String number, Long trainId, Integer seat, String date);
+
+    void cancelOrder(String number, boolean expiredOnly);
+
     void payOrder(String orderNumber);
 
     Order getOrderByNumber(String orderNumber);

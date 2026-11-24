@@ -85,6 +85,13 @@
           {{ type.label }}
         </div>
       </div>
+      <el-select v-model="departurePeriod" placeholder="发车时段" style="width:140px"><el-option label="全天" value="" /><el-option label="上午 00–12" value="am" /><el-option label="下午 12–18" value="pm" /><el-option label="晚上 18–24" value="night" /></el-select>
+      <el-select v-model="seatFilter" placeholder="席别" style="width:140px"><el-option label="全部席别" :value="-1" /><el-option v-for="(label,i) in ['商务座','一等座','二等座','软卧','硬卧','硬座']" :key="i" :label="label" :value="i" /></el-select>
+      <el-checkbox v-model="onlyAvailable">仅看有票</el-checkbox>
+      <el-select v-model="sortBy" aria-label="车次排序" style="width: 150px">
+        <el-option label="默认排序" value="default" />
+        <el-option label="价格从低到高" value="price" /><el-option label="耗时最短" value="duration" /><el-option label="最早出发" value="departure" />
+      </el-select>
       <span class="result-count">共 <strong>{{ filteredResults.length }}</strong> 趟车次</span>
     </div>
 
@@ -203,11 +210,23 @@ const results = ref([])
 const loading = ref(false)
 const searched = ref(false)
 const activeFilter = ref('')
+const onlyAvailable = ref(false)
+const departurePeriod = ref('')
+const seatFilter = ref(-1)
+const sortBy = ref('default')
 const selectedSeat = ref(null)
 
 const filteredResults = computed(() => {
-  if (!activeFilter.value) return results.value
-  return results.value.filter(t => t.trainTypeStr === activeFilter.value)
+  const items = results.value.filter(t => {
+    const hour = Number((t.departTime || '00:00').slice(0, 2))
+    const period = !departurePeriod.value || (departurePeriod.value === 'am' ? hour < 12 : departurePeriod.value === 'pm' ? hour >= 12 && hour < 18 : hour >= 18)
+    const seats = getSeatTypes(t).filter(s => seatFilter.value === -1 || Number(s.type) === seatFilter.value)
+    return (!activeFilter.value || t.trainTypeStr === activeFilter.value) && period && seats.length && (!onlyAvailable.value || seats.some(s => s.available > 0))
+  })
+  if (sortBy.value === 'price') return items.sort((a,b) => getLowestPrice(a)-getLowestPrice(b))
+  if (sortBy.value === 'duration') return items.sort((a,b) => Number(a.duration)-Number(b.duration))
+  if (sortBy.value === 'departure') return items.sort((a,b) => String(a.departTime).localeCompare(String(b.departTime)))
+  return items
 })
 
 function trainTypeTag(type) {
@@ -245,14 +264,16 @@ function getSeatTypes(train) {
     seats.push({ type: 3, label: '软卧', price: Number(train.softPrice) || 0, available: train.softSleepers ?? 0 })
   }
   if (seats.length === 0) {
-    seats.push({ type: 2, label: '二等座', price: Number(train.secondPrice) || 0, available: train.secondSeats ?? 10 })
+    seats.push({ type: 2, label: '二等座', price: Number(train.secondPrice) || 0, available: train.secondSeats ?? 0 })
   }
   return seats
 }
 
 function getLowestPrice(train) {
   const seats = getSeatTypes(train)
-  return Math.min(...seats.filter(s => s.available > 0).map(s => s.price)) || seats[0]?.price || 0
+  const available = seats.filter(s => s.available > 0)
+  const prices = (available.length ? available : seats).map(s => Number(s.price)).filter(p => Number.isFinite(p) && p > 0)
+  return prices.length ? Math.min(...prices) : 0
 }
 
 function isSelectedSeat(train, seat) {
@@ -721,4 +742,6 @@ onMounted(() => {
     margin-left: 12px;
   }
 }
+.filter-bar { flex-wrap: wrap; gap: 12px; }
+@media(max-width:768px) { .search-results { overflow-x:auto; } .train-row { min-width:650px; } .search-form { flex-wrap:wrap; } }
 </style>

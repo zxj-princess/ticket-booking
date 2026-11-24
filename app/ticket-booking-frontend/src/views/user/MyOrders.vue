@@ -96,9 +96,9 @@
           <div class="footer-left">
             <el-tag size="small" type="info" effect="plain">电子客票</el-tag>
             <span v-if="order.statusStr === 'PENDING'" class="tip-text">请按时乘车，发车前可办理退改签</span>
-            <span v-if="order.statusStr === 'UNPAID'" class="tip-text">请尽快完成支付，否则订单将被取消</span>
+            <span v-if="order.statusStr === 'UNPAID'" class="tip-text">剩余支付时间 {{ remaining(order) }}；以服务器状态为准</span>
           </div>
-          <div class="footer-actions">
+          <div class="footer-actions"><el-button v-if="order.statusStr === 'UNPAID'" @click="handleCancel(order)">取消订单</el-button>
             <el-button
               v-if="order.statusStr === 'PENDING'"
               size="default"
@@ -138,16 +138,29 @@
       </div>
     </div>
   </div>
+<el-dialog v-model="detailOpen" title="订单处理记录" width="min(560px, 92vw)">
+      <el-timeline v-if="detailEvents.length"><el-timeline-item v-for="(event, index) in detailEvents" :key="index" :timestamp="event.created_at">{{ event.detail }} <strong v-if="event.amount">¥{{ event.amount }}</strong></el-timeline-item></el-timeline>
+      <el-empty v-else description="历史订单暂无操作记录" />
+    </el-dialog>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Tickets, ArrowRight, Refresh, RefreshLeft, View, User, Money } from '@element-plus/icons-vue'
-import { getMyOrders, payOrder } from '@/api/order'
+import { getMyOrders, payOrder, cancelOrder, getOrderEvents } from '@/api/order'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
+const detailOpen = ref(false)
+const detailEvents = ref([])
+const now = ref(Date.now())
+let clockTimer
+function remaining(order) {
+  const seconds = Math.max(0, Math.floor((new Date(order.createTime).getTime() + 15 * 60000 - now.value) / 1000))
+  return `${Math.floor(seconds / 60)}分${seconds % 60}秒`
+}
+async function handleCancel(order) { await cancelOrder(order.orderNumber); await fetchOrders() }
 const loading = ref(false)
 const activeTab = ref('ALL')
 const orders = ref([])
@@ -202,16 +215,21 @@ async function handlePay(order) {
     ElMessage.error(e?.response?.data?.msg || '支付失败，请重试')
   }
 }
-function handleDetail(order) {
-  ElMessage.info(`订单详情：${order.trainNo} ${order.fromStation} → ${order.toStation}`)
+async function handleDetail(order) {
+  const res = await getOrderEvents(order.orderNumber)
+  detailEvents.value = res.data || []
+  detailOpen.value = true
 }
+
 function goSearch() {
   router.push('/search')
 }
 
 onMounted(() => {
   fetchOrders()
+  clockTimer = setInterval(() => { now.value = Date.now() }, 1000)
 })
+onUnmounted(() => clearInterval(clockTimer))
 </script>
 
 <style lang="scss" scoped>
